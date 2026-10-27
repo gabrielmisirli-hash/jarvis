@@ -19,6 +19,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import session_steer
+
 # Both roots must be read: the CLI's default and the one Orcha sets via
 # CLAUDE_CONFIG_DIR. On the dev machine `~/.claude/sessions` was empty and
 # every session lived under `~/.claude-orcha` — a plain-Terminal user is the
@@ -97,7 +99,7 @@ class RosterEntry:
         Measured: 4 of 17 live entries had none. `ListAgents` cannot see those
         at all, which is why this watcher exists.
         """
-        return bool(self.socket_path) and Path(self.socket_path).exists()
+        return session_steer.inbox_reachable(self.socket_path)
 
 
 def _parse_entry(path: Path, root: Path) -> RosterEntry | None:

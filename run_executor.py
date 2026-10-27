@@ -15,7 +15,6 @@ import asyncio
 import logging
 import math
 import os
-import shlex
 import shutil
 import time
 from typing import Callable
@@ -207,7 +206,8 @@ class RunExecutor:
                  idle_sec: float | None = None,
                  poll_sec: float = _READ_POLL_SEC):
         self._store = store
-        self._claude_path = claude_path or shutil.which("claude") or "claude"
+        self._claude_path = (claude_path or os.getenv("JARVIS_CLAUDE_PATH")
+                             or shutil.which("claude") or "claude")
         self._max_concurrent = max_concurrent
         self._grace_sec = grace_sec
         self._eof_grace_sec = eof_grace_sec
@@ -441,7 +441,7 @@ class RunExecutor:
 
     def _command(self, run_id: str, resume_from: str | None,
                 model: str | None = None) -> list[str]:
-        base = shlex.split(self._claude_path)
+        base = claude_env.claude_argv(self._claude_path)
         cmd = base + ["-p", "--output-format", "stream-json", "--verbose",
                       "--session-id", run_id]
         if resume_from:

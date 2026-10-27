@@ -229,7 +229,8 @@ export function createVoiceInput(
     const sr = new SR();
     sr.continuous = true;
     sr.interimResults = true;
-    sr.lang = "en-US";
+    // Recognition language; set VITE_SPEECH_LANG in frontend/.env to change it.
+    sr.lang = import.meta.env.VITE_SPEECH_LANG || "en-US";
     const e: Engine = { sr, running: false, audio: false, startedAt: 0, stoppedAt: 0, retired: false };
 
     sr.onstart = () => {

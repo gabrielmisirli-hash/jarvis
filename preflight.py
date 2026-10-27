@@ -441,6 +441,9 @@ def _check_screen_recording_sync() -> Check:
 
 def _check_fish_api_key_sync() -> Check:
     """FISH_API_KEY must be set or JARVIS has no voice."""
+    if os.environ.get("EDGE_TTS_VOICE", "").strip():
+        return Check(name="fish_api_key", status=STATUS_OK,
+                     message="EDGE_TTS_VOICE is set; Fish Audio is not used.")
     if os.environ.get("FISH_API_KEY"):
         return Check(name="fish_api_key", status=STATUS_OK, message="FISH_API_KEY is set.")
     return Check(

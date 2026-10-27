@@ -22,6 +22,24 @@ REFUSED = "refused"
 FAILED = "failed"
 
 
+def inbox_reachable(socket_path: str | None) -> bool:
+    """Whether `socket_path` names an inbox this module can post to.
+
+    On Windows a session's inbox is a named pipe (`\\\\.\\pipe\\...`), not a
+    Unix socket, so the AF_UNIX send below cannot reach it — and stat'ing a
+    pipe whose instances are all busy raises WinError 231 rather than
+    answering. Either way it is not steerable from here.
+    """
+    if not socket_path:
+        return False
+    if os.name == "nt" and socket_path.startswith("\\\\.\\pipe\\"):
+        return False
+    try:
+        return Path(socket_path).exists()
+    except OSError:
+        return False
+
+
 def post_to_session(socket_path: str | None, prompt: str,
                     timeout: float = 5.0) -> str:
     """Deliver one prompt. Returns `sent`, `not_live`, `refused`, or `failed`.
@@ -31,7 +49,7 @@ def post_to_session(socket_path: str | None, prompt: str,
     """
     if not prompt or not prompt.strip():
         return REFUSED
-    if not socket_path or not Path(socket_path).exists():
+    if not inbox_reachable(socket_path):
         return NOT_LIVE
 
     lines = []

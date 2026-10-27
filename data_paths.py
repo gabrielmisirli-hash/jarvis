@@ -386,14 +386,24 @@ def ensure_tool_token() -> str:
             os.close(fd)
         return token
 
-    fd = os.open(str(path), os.O_RDWR | os.O_NOFOLLOW)
+    # Windows has no O_NOFOLLOW, getuid or (before 3.13) fchmod. There the
+    # data dir sits under the user's profile, whose ACL already keeps other
+    # users out, so the link check is done by name and ownership is not.
+    windows = os.name == "nt"
+    if windows:
+        if path.is_symlink():
+            raise OSError(f"{path} is a link, not a regular file")
+        fd = os.open(str(path), os.O_RDWR | os.O_BINARY)
+    else:
+        fd = os.open(str(path), os.O_RDWR | os.O_NOFOLLOW)
     try:
         info = os.fstat(fd)
         if not _stat.S_ISREG(info.st_mode):
             raise OSError(f"{path} is not a regular file")
-        if info.st_uid != os.getuid():
-            raise OSError(f"{path} is owned by uid {info.st_uid}, not by us")
-        os.fchmod(fd, 0o600)
+        if not windows:
+            if info.st_uid != os.getuid():
+                raise OSError(f"{path} is owned by uid {info.st_uid}, not by us")
+            os.fchmod(fd, 0o600)
         existing = os.read(fd, 4096).decode("utf-8", "ignore").strip()
         if existing:
             return existing

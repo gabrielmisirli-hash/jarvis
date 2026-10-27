@@ -462,6 +462,9 @@ _last_greeting_time: float = 0
 
 async def synthesize_speech(text: str) -> Optional[bytes]:
     """Generate speech audio from text using Fish Audio TTS."""
+    if tts.edge_voice_configured():
+        r = await tts.synthesize_chunk(text, api_key="", voice_id="")
+        return r.audio if r else None
     if not FISH_API_KEY:
         log.warning("FISH_API_KEY not set, skipping TTS")
         return None

@@ -21,6 +21,7 @@ updated is the one nobody notices.
 from __future__ import annotations
 
 import os
+import shlex
 
 # Every ANTHROPIC_* variable, not just the key: the base URL and the model
 # override redirect a child just as effectively as credentials do.
@@ -46,6 +47,19 @@ SCRUBBED_ENV_KEYS = {"CLAUDECODE"}
 # unboundedly — pass this to every `create_subprocess_exec(..., limit=...)`
 # that reads a Claude Code child's stdout/stderr.
 STREAM_LINE_LIMIT = 64 * 1024 * 1024  # 64 MiB per line
+
+
+def claude_argv(spec: str) -> list[str]:
+    """The configured claude command (a path, or a path plus arguments) as
+    argv. POSIX shlex treats backslashes as escapes, so on Windows it turns
+    `C:\\Users\\...\\claude.exe` into `C:Users...claude.exe` and the spawn
+    fails with WinError 2. There, a path that exists is taken whole and
+    anything else is split in non-POSIX mode."""
+    if os.name != "nt":
+        return shlex.split(spec)
+    if os.path.isfile(spec):
+        return [spec]
+    return [part.strip('"') for part in shlex.split(spec, posix=False)]
 
 
 def child_env(base: dict[str, str] | None = None) -> dict[str, str]:
