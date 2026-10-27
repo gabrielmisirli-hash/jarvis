@@ -64,12 +64,15 @@ def test_command_has_exact_flags(tmp_path):
         "mcp__jarvis__read_page,mcp__jarvis__look_at_page,"
         "mcp__jarvis__what_is_on_screen,mcp__jarvis__look_at_screen,"
         "mcp__jarvis__github_repo,"
-        "mcp__jarvis__usage_status,mcp__jarvis__connections,"
+        "mcp__jarvis__usage_status,mcp__jarvis__weather_and_alerts,"
+        "mcp__jarvis__health_status,"
+        "mcp__jarvis__connections,"
         "mcp__jarvis__enable_session_inbox,"
         "mcp__jarvis__repo_overview,mcp__jarvis__search_repo,"
         "mcp__jarvis__read_file,mcp__jarvis__open_in_editor,"
         "mcp__jarvis__remember,mcp__jarvis__recall,"
         "mcp__jarvis__project_note,mcp__jarvis__write_journal,"
+        "mcp__jarvis__office_expert,mcp__jarvis__copy_to_clipboard,"
         # The CLI's own two, and the only built-ins here: without them JARVIS
         # can read a page he was given the address of and find nothing.
         "WebSearch,WebFetch")

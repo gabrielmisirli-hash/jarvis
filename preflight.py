@@ -680,28 +680,28 @@ def _phrase_for(check: Check) -> str:
     name, msg = check.name, check.message
     if name == "claude_cli":
         if "not on PATH" in msg:
-            return "Claude Code isn't installed"
+            return "o Claude Code não está instalado"
         if "older than" in msg:
-            return "Claude Code needs updating"
-        return "Claude Code's version couldn't be checked"
+            return "o Claude Code precisa ser atualizado"
+        return "não consegui verificar a versão do Claude Code"
     if name == "claude_login":
         if "not logged in" in msg:
-            return "Claude Code isn't logged in"
-        return "Claude Code's login couldn't be checked"
+            return "o Claude Code não está com login feito"
+        return "não consegui verificar o login do Claude Code"
     if name == "accessibility":
         if "not granted Accessibility" in msg:
-            return "I don't have Accessibility permission"
-        return "Accessibility couldn't be checked"
+            return "estou sem a permissão de Acessibilidade"
+        return "não consegui verificar a Acessibilidade"
     if name == "screen_recording":
         if "not been granted" in msg:
-            return "I don't have Screen Recording permission"
-        return "Screen Recording couldn't be checked"
+            return "estou sem a permissão de Gravação de Tela"
+        return "não consegui verificar a Gravação de Tela"
     if name == "fish_api_key":
-        return "I have no Fish Audio key"
+        return "estou sem a chave da Fish Audio"
     if name == "anthropic_key_leftover":
-        return "there's a leftover Anthropic API key in the environment"
+        return "sobrou uma chave da API da Anthropic no ambiente"
     if name == "cross_session_inbound":
-        return "cross-session steering isn't enabled"
+        return "o envio para outras sessões não está ativado"
     return check.message
 
 
@@ -712,18 +712,23 @@ def spoken_summary(checks: list["Check"]) -> str:
     never produces "all checks passed" -- only what needs attention, so the
     voice path has nothing to say when there is nothing to say.
     """
-    issues = [c for c in checks if c.status != STATUS_OK]
+    issues = [c for c in checks if c.status != STATUS_OK
+              and not (sys.platform != "darwin" and c.name in _MACOS_ONLY_CHECKS)]
     if not issues:
         return ""
 
     phrases = [_phrase_for(c) for c in issues]
 
     if len(phrases) == 1:
-        return f"One thing needs attention, sir: {phrases[0]}."
-    if len(phrases) == 2:
-        return f"Two things need attention, sir: {phrases[0]}, and {phrases[1]}."
+        return f"Uma coisa precisa de atenção: {phrases[0]}."
     return (
-        f"{len(phrases)} things need attention, sir: "
+        f"{len(phrases)} coisas precisam de atenção: "
         + ", ".join(phrases[:-1])
-        + f", and {phrases[-1]}."
+        + f" e {phrases[-1]}."
     )
+
+
+# Off macOS these can never pass — there is no Accessibility, no Screen
+# Recording, and no Unix-socket inbox to steer — so saying so on every start
+# is noise. They are still reported by the preflight endpoint.
+_MACOS_ONLY_CHECKS = {"accessibility", "screen_recording", "cross_session_inbound"}

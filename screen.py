@@ -38,6 +38,12 @@ No new dependencies: `screencapture`, `sips` and `osascript`, each spawned
 with an argument list (never a shell string) and each time-boxed. The one
 permission probe is `CGPreflightScreenCaptureAccess` through `ctypes`, which
 is the standard library.
+
+On Windows the same two capabilities go through Windows PowerShell, which
+ships with the OS: System.Drawing for the capture and the downscale, and the
+process list plus `GetForegroundWindow` for the windows. Windows has no
+Screen Recording permission to check, so neither the probe nor the
+blank-frame check applies there.
 """
 from __future__ import annotations
 
@@ -286,6 +292,8 @@ async def capture_screen(display: int | None = None) -> Shot:
 
     Call this ONLY on a turn the user drove. See the module docstring.
     """
+    if sys.platform == "win32":
+        return await _capture_screen_windows(display)
     if screen_recording_granted() is False:
         raise ScreenError(_NO_PERMISSION)
 
@@ -386,6 +394,8 @@ async def list_windows() -> list[Window]:
     Raises ScreenError when Accessibility is missing. An empty list would have
     JARVIS say "nothing is open" — a lie with a remedy attached.
     """
+    if sys.platform == "win32":
+        return await _list_windows_windows()
     rc, stdout, stderr = await _run("osascript", "-e", _WINDOWS_SCRIPT,
                                     timeout=WINDOWS_TIMEOUT_SEC)
     if rc != 0:
@@ -407,3 +417,110 @@ async def list_windows() -> list[Window]:
         if len(windows) >= MAX_WINDOWS:
             break
     return windows
+
+
+# ── Windows ────────────────────────────────────────────────────────────────
+
+# PowerShell starts, then compiles one P/Invoke shim with Add-Type: measured
+# at 2-4s together, so these sit above the macOS timeouts but still inside
+# server.SCREEN_DEADLINE_SEC (12s).
+WIN_CAPTURE_TIMEOUT_SEC = 10.0
+WIN_WINDOWS_TIMEOUT_SEC = 10.0
+
+# Captures one screen and writes it already shrunk to __MAX__ on its longest
+# edge. SetProcessDPIAware first: a DPI-unaware process sees a 150%-scaled
+# 1920x1080 display as 1280x720 and would copy only the top-left of it.
+_WIN_CAPTURE_SCRIPT = r"""
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+Add-Type -Namespace JarvisScreen -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
+[void][JarvisScreen.Dpi]::SetProcessDPIAware()
+$screens = [System.Windows.Forms.Screen]::AllScreens
+$idx = __DISPLAY__
+if ($idx -gt 0) {
+    if ($idx -gt $screens.Count) { [Console]::Error.WriteLine('no such display'); exit 3 }
+    $s = $screens[$idx - 1]
+} else { $s = [System.Windows.Forms.Screen]::PrimaryScreen }
+$b = $s.Bounds
+$full = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+$g = [System.Drawing.Graphics]::FromImage($full)
+$g.CopyFromScreen($b.Left, $b.Top, 0, 0, $full.Size)
+$g.Dispose()
+$scale = [Math]::Min(1.0, __MAX__ / [Math]::Max($b.Width, $b.Height))
+$w = [int][Math]::Round($b.Width * $scale)
+$h = [int][Math]::Round($b.Height * $scale)
+$out = New-Object System.Drawing.Bitmap $w, $h
+$g2 = [System.Drawing.Graphics]::FromImage($out)
+$g2.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+$g2.DrawImage($full, 0, 0, $w, $h)
+$g2.Dispose()
+$full.Dispose()
+$out.Save('__PATH__', [System.Drawing.Imaging.ImageFormat]::Png)
+$out.Dispose()
+"""
+
+# Every process that owns a titled top-level window, with the app's
+# friendly name where it has one ("Google Chrome", not "chrome").
+_WIN_WINDOWS_SCRIPT = r"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -Namespace JarvisScreen -Name Fg -MemberDefinition '[DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();'
+$fg = [JarvisScreen.Fg]::GetForegroundWindow()
+Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | ForEach-Object {
+    $app = $_.ProcessName
+    try { $d = $_.MainModule.FileVersionInfo.FileDescription; if ($d) { $app = $d } } catch {}
+    '{0}|||{1}|||{2}' -f $app, $_.MainWindowTitle, ($_.MainWindowHandle -eq $fg)
+}
+"""
+
+
+def _powershell(script: str) -> list[str]:
+    """argv for one Windows PowerShell -Command. `-Command` is not subject to
+    the execution policy that blocks .ps1 files on this kind of machine."""
+    return ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script]
+
+
+async def _capture_screen_windows(display: int | None) -> Shot:
+    workdir = Path(tempfile.mkdtemp(prefix="jarvis-screen-"))
+    try:
+        shot_path = workdir / "screen.png"
+        script = (_WIN_CAPTURE_SCRIPT
+                  .replace("__DISPLAY__", str(int(display or 0)))
+                  .replace("__MAX__", str(SHOT_MAX_EDGE))
+                  # mkdtemp's own path, quoted for a single-quoted PS string.
+                  .replace("__PATH__", str(shot_path).replace("'", "''")))
+        rc, _out, err = await _run(*_powershell(script), timeout=WIN_CAPTURE_TIMEOUT_SEC)
+        if rc == 3:
+            raise ScreenError("there's no display with that number, sir")
+        if rc != 0 or not shot_path.exists():
+            log.warning(f"windows screen capture failed: {err.strip()[:200]}")
+            raise ScreenError("I couldn't get a picture of your screen, sir")
+
+        png = shot_path.read_bytes()
+        size = _png_size(png)
+        if size is None:
+            raise ScreenError("I couldn't get a picture of your screen, sir")
+        if len(png) > MAX_SHOT_BYTES:
+            raise ScreenError("that picture came out far too large to send, sir")
+        return Shot(png=png, width=size[0], height=size[1])
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+async def _list_windows_windows() -> list[Window]:
+    rc, stdout, stderr = await _run(*_powershell(_WIN_WINDOWS_SCRIPT),
+                                    timeout=WIN_WINDOWS_TIMEOUT_SEC)
+    if rc != 0:
+        log.warning(f"list_windows failed: {stderr.strip()[:200]}")
+        raise ScreenError("I couldn't read what's open, sir")
+
+    windows: list[Window] = []
+    for line in stdout.splitlines():
+        parts = line.split("|||")
+        if len(parts) < 3:
+            continue
+        windows.append(Window(app=parts[0].strip(), title=parts[1].strip(),
+                              frontmost=parts[2].strip().lower() == "true"))
+    # The app in front first, so MAX_WINDOWS never cuts the one that matters.
+    windows.sort(key=lambda w: not w.frontmost)
+    return windows[:MAX_WINDOWS]

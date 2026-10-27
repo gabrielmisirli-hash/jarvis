@@ -33,6 +33,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import screen as real_screen
 
 
+@pytest.fixture(autouse=True)
+def _macos_path(monkeypatch):
+    """These tests fake screencapture/sips/osascript, so they drive the macOS
+    path whatever machine runs them; the Windows path is tested on its own."""
+    monkeypatch.setattr(real_screen.sys, "platform", "darwin")
+
+
 # --- building real PNGs, with nothing but the standard library -------------
 
 def _png(width: int, height: int, rows) -> bytes:

@@ -441,6 +441,32 @@ TOOL_SPECS = [
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
+        "name": "weather_and_alerts",
+        "description": (
+            "The weather where the user is — now and the rest of today — and "
+            "every official INMET warning (storm, heavy rain, wind, dry air: "
+            "what Defesa Civil relays) in force or forecast for that spot. "
+            "THE way to answer 'how's the weather', 'will it rain', 'any "
+            "alerts', 'is Defesa Civil warning about anything'. Lead with any "
+            "warning. When it says the warning service was unreachable, say "
+            "so — never claim there are none. It does NOT cover Polícia "
+            "Militar or Corpo de Bombeiros notices, which have no official "
+            "feed: for those use WebSearch and say where it came from."),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "health_status",
+        "description": (
+            "The user's health watch over the last seven days — steps, "
+            "distance, active calories, heart rate (min/avg/max), resting "
+            "heart rate, SpO2, sleep, blood pressure — as synced from the "
+            "watch through Apple Health. THE way to answer 'how many steps "
+            "today', 'how did I sleep', 'what's my heart rate been'. Never "
+            "answer those from memory. It is a consumer watch: report the "
+            "numbers, never diagnose. If it says no data has arrived, say so."),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "connections",
         "description": (
             "The services the user has connected you to, from what is actually "
@@ -692,6 +718,54 @@ TOOL_SPECS = [
             "properties": {
                 "text": {"type": "string"},
                 "reason": {"type": "string"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "office_expert",
+        "description": (
+            "Your expert reference for Microsoft Office and data work: Excel "
+            "formulas WITH their Brazilian-Portuguese names and semicolon "
+            "separators, VBA macros, Power BI and DAX, Power Query (M), "
+            "dashboard design, Word, PowerPoint, and the programming around "
+            "them (Python with Excel, SQL, Office Scripts). Call it BEFORE "
+            "answering any such question, even one you think you know — it "
+            "carries the pt-BR conventions a model gets wrong (PROCX not "
+            "XLOOKUP, ';' not ',', .FormulaLocal vs .Formula). It returns one "
+            "section; `focus` picks which, and the reply lists the others. "
+            "Speak the answer in one or two sentences; any formula or code "
+            "goes through copy_to_clipboard, never aloud. Building a whole "
+            "workbook, report or script is a spawn_run."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string",
+                          "enum": ["excel", "vba", "power_bi", "power_query",
+                                   "dashboards", "word", "powerpoint",
+                                   "programacao"]},
+                "focus": {"type": "string",
+                          "description": ("A few words on what the user needs, "
+                                          "e.g. 'procx duas chaves', "
+                                          "'acumulado no ano', 'erro 1004'.")},
+            },
+            "required": ["topic"],
+        },
+    },
+    {
+        "name": "copy_to_clipboard",
+        "description": (
+            "Put text on the user's clipboard so they can paste it. THE way to "
+            "hand over a formula, a macro, a DAX measure, a query or any code: "
+            "it cannot be spoken, so never read it out. Write it exactly as it "
+            "must be pasted — for the user's pt-BR Excel, Portuguese function "
+            "names and ';' separators. Then say in one sentence what it does "
+            "and where to paste it. Only when the user asked for it this turn."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string",
+                         "description": "Exactly what goes on the clipboard."},
             },
             "required": ["text"],
         },

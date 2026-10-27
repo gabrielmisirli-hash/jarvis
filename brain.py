@@ -63,6 +63,8 @@ ALLOWED_TOOLS = [
     "mcp__jarvis__look_at_screen",
     "mcp__jarvis__github_repo",
     "mcp__jarvis__usage_status",
+    "mcp__jarvis__weather_and_alerts",
+    "mcp__jarvis__health_status",
     "mcp__jarvis__connections",
     "mcp__jarvis__enable_session_inbox",
     "mcp__jarvis__repo_overview",
@@ -73,6 +75,8 @@ ALLOWED_TOOLS = [
     "mcp__jarvis__recall",
     "mcp__jarvis__project_note",
     "mcp__jarvis__write_journal",
+    "mcp__jarvis__office_expert",
+    "mcp__jarvis__copy_to_clipboard",
     # The CLI's own two, and the only non-JARVIS tools here. JARVIS could read
     # a page he was handed the address of and nothing else — "look it up" had
     # no answer at all. Both were verified inside this exact flag set

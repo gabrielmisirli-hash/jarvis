@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JARVIS · Painel de Controle</title>
+    <link rel="stylesheet" href="/src/painel/style.css" />
+  </head>
+  <body>
+    <div class="pn-grid-bg" aria-hidden="true"></div>
+
+    <!-- Sidebar: built from SECTIONS in src/painel/main.ts. -->
+    <aside id="pn-side" class="pn-side">
+      <header class="pn-brand">
+        <div>
+          <div class="pn-brand-mark">JARVIS</div>
+          <div class="pn-brand-sub">Assistente de IA</div>
+        </div>
+        <button id="pn-collapse" class="pn-collapse" type="button"
+                aria-label="Recolher menu">‹</button>
+      </header>
+      <nav id="pn-nav" class="pn-nav"></nav>
+      <footer class="pn-side-foot">
+        <span id="pn-link" class="pn-link tone-idle">
+          <span class="pn-dot" aria-hidden="true"></span>
+          <span id="pn-link-text">Conectando…</span>
+        </span>
+      </footer>
+    </aside>
+
+    <main class="pn-main">
+      <header class="pn-head">
+        <div>
+          <h1 id="pn-title" class="pn-title"></h1>
+          <p id="pn-subtitle" class="pn-subtitle"></p>
+        </div>
+        <div class="pn-head-actions">
+          <a class="pn-btn pn-btn--ghost" href="/">Abrir orbe de voz</a>
+          <a class="pn-btn pn-btn--ghost" href="/dashboard.html">Run Control</a>
+        </div>
+      </header>
+      <section id="pn-view" class="pn-view"></section>
+    </main>
+
+    <script type="module" src="/src/painel/main.ts"></script>
+  </body>
+</html>

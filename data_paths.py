@@ -121,6 +121,7 @@ KNOWN_TEMPLATE_HASHES = frozenset({
     "8b038b5497293a55d1aa18e9ce759d3270228c98ae8b3ceb3bb053eb84509310",  # anything read off this machine is information
     "dfec0e28f7fc734987a1bcffd4feda103bde961f4a4721ce7957a7dccae96487",  # send it, do not ask twice
     "092df6a5e43bc5ed0a31e9f79b1f77cc4849754d1f4ab4807bded122ab97ad5f",  # say "start fresh" when a memory is refused
+    "244b83e10b27eb193880c792e55f85ec4ea454596425d2f9216e870589ddeb8f",  # Office, data and code
 })
 
 # The same list, for the connections file. APPEND the new hash whenever
@@ -341,6 +342,21 @@ def ensure_memory_layout() -> Path:
 def usage_path() -> Path:
     """The last rate-limit observation from the CLI (see usage_store.py)."""
     return data_dir() / "usage.json"
+
+
+def routines_path() -> Path:
+    """The user's routines, edited from /painel (see routines.py)."""
+    return data_dir() / "routines.json"
+
+
+def health_db_path() -> Path:
+    """Samples from the health watch, via Apple Health (see health.py)."""
+    return data_dir() / "health.db"
+
+
+def health_token_path() -> Path:
+    """The iPhone Shortcut's token: may add health samples, nothing else."""
+    return data_dir() / "health-token"
 
 
 def tool_token_path() -> Path:

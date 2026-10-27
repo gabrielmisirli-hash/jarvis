@@ -93,6 +93,13 @@ arbitrary LLM and file content, so everything goes through
 - `frontend/src/voice.ts` — Web Speech API + audio playback
 - `frontend/src/main.ts` — Frontend state machine
 - `frontend/src/dashboard/` — The `/dashboard` run monitor (vanilla TS)
+- `frontend/src/painel/` — The `/painel` control panel (pt-BR sidebar: chat,
+  status, briefing, data sources, monitoring, usage, routines, logs,
+  settings, first steps). Reuses the dashboard's tokens, `api.ts` and `el()`
+- `routines.py` — Routines edited from `/painel`: a whole-utterance phrase or
+  a JARVIS event (`greeting`) runs fixed steps (say / wait / ask / run) before
+  the utterance ever reaches the brain. One JSON file,
+  `data_paths.routines_path()`
 - `run_store.py` — SQLite `runs` / `run_events` tables, six-value status enum
 - `run_executor.py` — Spawns `claude -p --output-format stream-json` and drives
   each run to a terminal state, streaming its events into the store
@@ -126,6 +133,12 @@ arbitrary LLM and file content, so everything goes through
 - `screen.py` — Seeing the Mac itself: the window list (`osascript`) and one
   downscaled `screencapture` the brain sees as an MCP image block. Captured
   only on a turn the user drove, never persisted, never on a timer
+- `office_expert.py` — Serves `skills/office-expert/reference/*.md` (Excel
+  with pt-BR names, VBA, Power BI/DAX, Power Query, dashboards, Word,
+  PowerPoint, programming) one section at a time, sized under the 1500-char
+  tool-result cap
+- `clipboard.py` — `copy_to_clipboard`: how code reaches the user, since it
+  cannot be spoken. Windows goes through `Set-Clipboard`, never `clip.exe`
 - `repo_read.py` — Cheap, model-free reading of a repository (no `claude`
   subprocess)
 - `project_maker.py` — Creates a new project directory from a spoken name,

@@ -71,6 +71,7 @@ import preflight
 import project_maker
 import projects_view
 import repo_read
+import routines
 import run_store
 import session_steer
 import session_watch
@@ -226,11 +227,13 @@ SCAN_BUDGET_SECONDS = float(os.getenv("JARVIS_SCAN_BUDGET", "20"))
 SCAN_CACHE_SECONDS = float(os.getenv("JARVIS_SCAN_CACHE", "300"))
 
 # Roots are overridable so a user whose Desktop is slow, huge or cloud-backed
-# has somewhere to point this. Colon-separated, like PATH.
+# has somewhere to point this. Separated like PATH, by `os.pathsep`: ":" on
+# macOS, ";" on Windows, where splitting on ":" cut `C:\Users` in two.
 def _scan_roots() -> list[Path]:
     override = os.getenv("JARVIS_PROJECT_ROOTS", "").strip()
     if override:
-        return [Path(r).expanduser() for r in override.split(":") if r.strip()]
+        return [Path(r.strip()).expanduser()
+                for r in override.split(os.pathsep) if r.strip()]
     return [DESKTOP_PATH, project_maker.projects_root()]
 
 
@@ -633,16 +636,25 @@ def _fmt_reset(ts) -> str:
     try:
         when = datetime.fromtimestamp(float(ts))
     except (TypeError, ValueError, OSError, OverflowError):
-        return "later"
-    clock = when.strftime("%-I:%M %p").replace(":00 ", " ")   # "10:00 AM" -> "10 AM"
+        return "mais tarde"
+    # Built by hand rather than strftime: "%-I"/"%-d" are POSIX-only and
+    # raise on Windows, and %A/%B follow the OS locale, not the spoken one.
+    clock = f"{when.hour}h" if when.minute == 0 else f"{when.hour}h{when.minute:02d}"
     days = (when.date() - datetime.now().date()).days
     if days <= 0:
-        return clock
+        return f"às {clock}"
     if days == 1:
-        return f"tomorrow at {clock}"
+        return f"amanhã às {clock}"
+    weekday = _PT_WEEKDAYS[when.weekday()]
     if days < 7:
-        return f"{when.strftime('%A')} at {clock}"
-    return f"{when.strftime('%A %-d %B')} at {clock}"
+        return f"{weekday} às {clock}"
+    return f"{weekday}, {when.day} de {_PT_MONTHS[when.month - 1]}, às {clock}"
+
+
+_PT_WEEKDAYS = ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+                "sexta-feira", "sábado", "domingo")
+_PT_MONTHS = ("janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
+              "agosto", "setembro", "outubro", "novembro", "dezembro")
 
 
 # True but useless: "down" names neither cause nor remedy. When the brain's
@@ -651,8 +663,8 @@ def _fmt_reset(ts) -> str:
 # (the "failed" event) and _handle_utterance (a turn attempted while already
 # failed) so the two auth lines never drift apart -- each keeps its own
 # pre-existing generic line otherwise.
-_AUTH_BRAIN_DOWN_LINE = ("Claude Code's login has expired, sir — run `claude` in a "
-                        "terminal and log in, then restart me.")
+_AUTH_BRAIN_DOWN_LINE = ("O login do Claude Code expirou — rode claude ponto cmd num "
+                        "terminal, entre de novo e me reinicie.")
 _AUTH_REMEDY_LOG_LINE = ("brain: giving up — Claude Code's OAuth login has expired. "
                          "Remedy: run `claude` in a terminal and log in, then restart JARVIS.")
 
@@ -710,23 +722,24 @@ async def _on_brain_state(state: str, info: dict) -> None:
         now = time.time()
         if now - _brain_notice_at["restarting"] > 60:
             _brain_notice_at["restarting"] = now
-            await speech.say("Rebooting my language systems, one moment.", Priority.NORMAL)
+            await speech.say("Reiniciando meus sistemas, só um instante.", Priority.NORMAL)
     elif state == "failed":
         line = (_AUTH_BRAIN_DOWN_LINE if info.get("failure_reason") == "auth"
-               else "My language systems are down, sir. Check the server log.")
+               else "Meus sistemas de linguagem caíram. Dá uma olhada no log do servidor.")
         await speech.say(line, Priority.URGENT, immediate=True)
     elif state == "rate_limited":
-        await speech.say(f"I've hit the usage limit until {_fmt_reset(info.get('resets_at'))}, sir.",
+        await speech.say(f"Atingi o limite de uso até {_fmt_reset(info.get('resets_at'))}.",
                          Priority.NORMAL)
 
 
 def _greeting() -> str:
     hour = datetime.now().hour
-    if hour < 12:
-        return "Good morning, sir."
-    if hour < 17:
-        return "Good afternoon, sir."
-    return "Good evening, sir."
+    name = "" if USER_NAME in ("", "sir") else f", {USER_NAME}"
+    if 5 <= hour < 12:
+        return f"Bom dia{name}."
+    if 12 <= hour < 18:
+        return f"Boa tarde{name}."
+    return f"Boa noite{name}."
 
 
 def _tool_connect_host(bind_host: str) -> str:
@@ -1073,7 +1086,7 @@ async def _start_fresh() -> None:
         except Exception as e:
             log.error(f"fresh start failed: {e}", exc_info=True)
             if speech is not None:
-                await speech.say("I couldn't clear it, sir.", Priority.NORMAL)
+                await speech.say("Não consegui limpar.", Priority.NORMAL)
             return
     log.info("fresh start: generation discarded at the user's request")
     if speech is not None:
@@ -1316,9 +1329,8 @@ def _cap_listing(items: list[str]) -> str:
 
 def _session_batch_line(names: list[str]) -> str:
     if len(names) == 1:
-        return f"{names[0]} has finished, sir."
-    return (f"{_say_number(len(names)).capitalize()} conversations have "
-            f"finished, sir: {_cap_listing(names)}.")
+        return f"{names[0]} terminou."
+    return f"{len(names)} conversas terminaram: {_cap_listing(names)}."
 
 
 def _run_batch_line(projects: list[str]) -> str:
@@ -1328,8 +1340,8 @@ def _run_batch_line(projects: list[str]) -> str:
     so "is done" is an honest report of success, not a euphemism for "ended".
     """
     if len(projects) == 1:
-        return f"The work in {projects[0]} is done, sir."
-    return f"Work in {_cap_listing(projects)} is done, sir."
+        return f"O trabalho em {projects[0]} ficou pronto."
+    return f"O trabalho em {_cap_listing(projects)} ficou pronto."
 
 
 async def _announce_batch() -> None:
@@ -1428,11 +1440,11 @@ async def _announce_run_stalled(run: dict, outcome: str) -> None:
         return
     project = _run_project(run)
     if outcome == stream_parser.STALLED:
-        line = (f"The work in {project} stopped to ask a question, sir, so "
-                f"nothing was built.")
+        line = (f"O trabalho em {project} parou para fazer uma pergunta, "
+                f"então nada foi construído.")
     else:
-        line = (f"The work in {project} finished, sir, but I can't see that "
-                f"it changed anything.")
+        line = (f"O trabalho em {project} terminou, mas não vejo nenhuma "
+                f"mudança.")
     try:
         await speech.say(line, Priority.URGENT)
     except Exception as e:
@@ -1445,9 +1457,9 @@ async def _announce_run_failure(run: dict) -> None:
         return
     project = _run_project(run)
     if run.get("status") == run_store.RunStatus.TIMED_OUT:
-        line = f"The work in {project} ran out of time, sir."
+        line = f"O trabalho em {project} estourou o tempo."
     else:
-        line = f"The work in {project} failed, sir."
+        line = f"O trabalho em {project} falhou."
     try:
         await speech.say(line, Priority.URGENT)
     except Exception as e:
@@ -1635,9 +1647,9 @@ async def _handle_utterance(text: str) -> None:
         if brain_instance.failed:
             line = (_AUTH_BRAIN_DOWN_LINE
                     if getattr(brain_instance, "failure_reason", None) == "auth"
-                    else "My language systems are down, sir.")
+                    else "Meus sistemas de linguagem caíram.")
         else:
-            line = "One moment, sir — my language systems are still starting."
+            line = "Só um instante — meus sistemas ainda estão iniciando."
         await speech.say(line, Priority.NORMAL)
         return
     utt = speech.begin_turn()
@@ -1653,17 +1665,17 @@ async def _handle_utterance(text: str) -> None:
                 await speech.end_turn(utt)  # a turn that never ends would wedge the mouth
         except Exception as e:
             log.error(f"brain turn failed: {e}", exc_info=True)
-            await speech.say("I lost my train of thought, sir. Say that again?", Priority.NORMAL)
+            await speech.say("Perdi o fio da meada. Pode repetir?", Priority.NORMAL)
             return
         if result.stop_reason == "rate_limited":
             resets = (result.rate_limit or {}).get("resetsAt")
-            await speech.say(f"I've hit the usage limit until {_fmt_reset(resets)}, sir.", Priority.NORMAL)
+            await speech.say(f"Atingi o limite de uso até {_fmt_reset(resets)}.", Priority.NORMAL)
         elif result.stop_reason == "error":
             log.error(f"brain error: {result.error}")
-            await speech.say("My language systems returned an error, sir. Check the server log.",
+            await speech.say("Meus sistemas de linguagem deram erro. Dá uma olhada no log do servidor.",
                              Priority.NORMAL)
         elif result.stop_reason in ("timeout", "died", "not_running"):
-            await speech.say("I lost my train of thought, sir. Say that again?", Priority.NORMAL)
+            await speech.say("Perdi o fio da meada. Pode repetir?", Priority.NORMAL)
         elif not result.text.strip():
             await _voice_emit({"type": "status", "state": "idle"})
         log.info(f"JARVIS: {result.text.strip()[:300]}")
@@ -1815,10 +1827,13 @@ async def lifespan(application: FastAPI):
     # is kept in _background so it is not garbage-collected mid-flight.
     _background.add(task := asyncio.create_task(_run_preflight()))
     task.add_done_callback(_background.discard)
+    health_task = _start_health_ingest()
     log.info("JARVIS server starting")
 
     yield
 
+    if health_task:
+        health_task.cancel()
     await stop_session_watcher()
     await stop_brain_and_speech()
 
@@ -2358,6 +2373,9 @@ TAINTING_TOOLS = {
     # gate it.
     "look_at_screen": "what is on your screen",
     "what_is_on_screen": "what is on your screen",
+    # INMET's warning texts. Official, but still words JARVIS did not write,
+    # fetched over the network into a context that holds `spawn_run`.
+    "weather_and_alerts": "an official weather warning",
 }
 
 # The other half of the partition, each with the reason it is exempt. Held
@@ -2377,6 +2395,10 @@ TAINT_EXEMPT_TOOLS = {
     "connections": (
         "it reports the servers the USER declared in his own "
         "connections.json, which is his file and not a stranger's"),
+    "office_expert": (
+        "it reads the guides shipped in this repository under "
+        "skills/office-expert, written by the project and not by a "
+        "stranger; nothing it returns came off the network or a project"),
     "recall": (
         "it reads JARVIS's own memory, which is already `@`-imported into "
         "every turn as trusted system text — tainting on read would be "
@@ -2394,6 +2416,7 @@ TAINT_EXEMPT_TOOLS = {
     "open_in_browser": "it opens a window, it does not read",
     "open_in_terminal": "it opens a window, it does not read",
     "open_in_editor": "it opens a window, it does not read",
+    "copy_to_clipboard": "it writes the clipboard, it does not read",
     "enable_session_inbox": "it edits a settings file, it does not read",
     "remember": "it writes a memory, it does not read",
     "project_note": "it writes a note, it does not read",
@@ -3426,7 +3449,7 @@ async def _perform_steer(item: _StagedSteer) -> None:
                 record("readback_failed")
                 return
             record("cancelled_by_user")
-            await speech.say("Cancelled, sir.", Priority.NORMAL)
+            await speech.say("Cancelado.", Priority.NORMAL)
             return
         if not heard:
             # TTS wedged or the transport was abandoned mid-utterance: never
@@ -3435,7 +3458,7 @@ async def _perform_steer(item: _StagedSteer) -> None:
             return
         if await speech.open_cancel_window(STEER_CANCEL_WINDOW):
             record("cancelled_by_user")
-            await speech.say("Cancelled, sir.", Priority.NORMAL)
+            await speech.say("Cancelado.", Priority.NORMAL)
             return
 
         outcome = await asyncio.to_thread(
@@ -3521,14 +3544,14 @@ async def _perform_command(item: _StagedCommand) -> None:
                 record("readback_failed")
                 return
             record("cancelled_by_user")
-            await speech.say("Cancelled, sir.", Priority.NORMAL)
+            await speech.say("Cancelado.", Priority.NORMAL)
             return
         if not heard:
             record("readback_failed")
             return
         if await speech.open_cancel_window(STEER_CANCEL_WINDOW):
             record("cancelled_by_user")
-            await speech.say("Cancelled, sir.", Priority.NORMAL)
+            await speech.say("Cancelado.", Priority.NORMAL)
             return
 
         # `cd` into the project first: a start command means nothing in the
@@ -3630,14 +3653,14 @@ async def _perform_dialog(item: _StagedDialog) -> None:
                 record("readback_failed")
                 return
             record("cancelled_by_user")
-            await speech.say("Cancelled, sir.", Priority.NORMAL)
+            await speech.say("Cancelado.", Priority.NORMAL)
             return
         if not heard:
             record("readback_failed")
             return
         if await speech.open_cancel_window(STEER_CANCEL_WINDOW):
             record("cancelled_by_user")
-            await speech.say("Cancelled, sir.", Priority.NORMAL)
+            await speech.say("Cancelado.", Priority.NORMAL)
             return
 
         outcome = await dialog.answer(item.pid, item.key)
@@ -6121,6 +6144,134 @@ TOOL_HANDLERS["usage_status"] = tool_usage_status
 # depend on who is talking, so it is deliberately NOT an acting tool.
 
 
+# --- weather and official warnings -----------------------------------------
+#
+# The location is the same one the weather always used (env override, else
+# IP geolocation — `_get_weather_location`). The warnings are INMET's, which
+# is what Defesa Civil relays; see local_alerts.py for why there is nothing
+# here for Polícia Militar or Bombeiros.
+
+import local_alerts                                       # noqa: E402
+
+
+async def tool_weather_and_alerts(args: dict) -> str:
+    """Weather now and today, plus the official warnings that cover the user."""
+    location = await asyncio.to_thread(_get_weather_location)
+    if not location:
+        return ("I couldn't work out where you are, sir. Set WEATHER_LATITUDE "
+                "and WEATHER_LONGITUDE in .env and I'll know.")
+    lat, lon, label = location["latitude"], location["longitude"], location["label"]
+    unit = os.getenv("WEATHER_UNIT", "celsius").strip().lower()
+    if unit not in ("fahrenheit", "celsius"):
+        unit = "celsius"
+
+    weather, warnings = await asyncio.gather(
+        local_alerts.fetch_weather(lat, lon, label, unit),
+        local_alerts.fetch_warnings(lat, lon))
+
+    parts = [weather or "No weather reading came back — say so, do not guess."]
+    if warnings is None:
+        parts.append("INMET's warning service could not be reached, so I do "
+                     "not know whether any warning is in force. Say exactly "
+                     "that — never say there are none.")
+    elif not warnings:
+        parts.append(f"No INMET / Defesa Civil warning in force or forecast "
+                     f"for {label}.")
+    else:
+        parts.append(f"{len(warnings)} INMET / Defesa Civil warning(s) cover "
+                     f"{label}:\n" + _wrap_untrusted(
+                         "official warning",
+                         local_alerts.format_warnings(warnings)))
+    return "\n\n".join(parts)
+
+
+TOOL_HANDLERS["weather_and_alerts"] = tool_weather_and_alerts
+# It reaches two fixed hosts and no address a model chose, so it is not an
+# acting tool. It does bring back text JARVIS did not write (the warnings),
+# so it taints — see TAINTING_TOOLS.
+
+
+# --- the health watch -------------------------------------------------------
+
+import health as health_watch                             # noqa: E402
+
+
+def tool_health_status(args: dict) -> str:
+    """The last seven days from the watch, as numbers."""
+    return health_watch.describe()
+
+
+TOOL_HANDLERS["health_status"] = tool_health_status
+# Reads a local database. Every row passed health_watch.parse_payload, which keeps
+# a metric name from a fixed list, a date and a float — no text the phone
+# wrote survives it — so it neither acts nor taints.
+
+
+def _start_health_ingest() -> Optional[asyncio.Task]:
+    """The phone's listener, only when JARVIS_HEALTH_PORT asks for it."""
+    port = health_watch.ingest_port()
+    if port is None:
+        return None
+    health_watch.ensure_token()
+
+    async def _serve():
+        try:
+            await health_watch.serve_ingest(port)
+        except asyncio.CancelledError:
+            raise
+        except BaseException as e:            # uvicorn exits via SystemExit
+            log.error(f"health ingest listener on :{port} stopped: {e!r}")
+
+    log.info(f"health ingest listening on {health_watch.ingest_host()}:{port}")
+    task = asyncio.create_task(_serve())
+    _background.add(task)
+    task.add_done_callback(_background.discard)
+    return task
+
+
+# ---------------------------------------------------------------------------
+# Office expertise and the clipboard
+# ---------------------------------------------------------------------------
+
+import clipboard                                          # noqa: E402
+import office_expert                                      # noqa: E402
+
+
+def tool_office_expert(args: dict) -> str:
+    """One section of a shipped guide. `focus` picks it and is never echoed."""
+    topic = office_expert.resolve_topic(str(args.get("topic") or ""))
+    if topic is None:
+        return ("I have no guide by that name. Topics: "
+                + ", ".join(office_expert.TOPICS) + ".")
+    # `lookup` only scores sections against `focus` and never writes it into
+    # the reply — tests/test_office_expert.py::test_focus_is_never_echoed.
+    section = office_expert.lookup(topic, str(args.get("focus") or ""))
+    return section
+
+
+async def tool_copy_to_clipboard(args: dict) -> str:
+    """The way code reaches the user: it cannot be spoken, so it is pasted."""
+    text = str(args.get("text") or "")
+    if not text.strip():
+        return "There was nothing to copy."
+    try:
+        await clipboard.copy(text)
+    except clipboard.ClipboardError as e:
+        return f"I couldn't put it on the clipboard: {e}."
+    lines = len(text.strip().splitlines())
+    return (f"On the clipboard, {_say_number(lines)} "
+            f"{'line' if lines == 1 else 'lines'}, ready to paste.")
+
+
+TOOL_HANDLERS.update({
+    "office_expert": tool_office_expert,
+    "copy_to_clipboard": tool_copy_to_clipboard,
+})
+# The clipboard WRITES, and what is on it gets pasted into a workbook and run.
+# A macro lifted from a web page must not land there on a turn that read one.
+ACTING_TOOLS.add("copy_to_clipboard")
+
+
 # --- "what are you connected to?" ----------------------------------------
 #
 # The answer comes from what ACTUALLY started, never from a list written down
@@ -6604,6 +6755,8 @@ async def voice_handler(ws: WebSocket):
         if speech is not None and time.time() - _last_greeting_time > 60:
             _last_greeting_time = time.time()
             await speech.say(_greeting(), Priority.NORMAL)
+            for routine in routines.for_event(routines.load(), "greeting", datetime.now()):
+                _spawn(_run_routine(routine))
 
         while True:
             raw = await ws.receive_text()
@@ -6681,6 +6834,11 @@ async def voice_handler(ws: WebSocket):
                 log.info(f"User: {text}")
                 if _is_fresh_start(text):
                     _spawn(_start_fresh())
+                    continue
+                routine = routines.match_phrase(routines.load(), text, datetime.now())
+                if routine is not None:
+                    log.info(f"Routine fired: {routine['name']}")
+                    _spawn(_run_routine(routine))
                     continue
                 _spawn(_handle_utterance(text))
     except WebSocketDisconnect:
@@ -6884,6 +7042,8 @@ async def api_settings_status():
         "env_keys_set": {
             "fish_audio": bool(env_dict.get("FISH_API_KEY", "").strip() and env_dict.get("FISH_API_KEY", "") != "your-fish-audio-api-key-here"),
             "fish_voice_id": bool(env_dict.get("FISH_VOICE_ID", "").strip()),
+            # The free Edge voice replaces Fish entirely when it is set.
+            "edge_voice": tts.edge_voice_configured(),
             "user_name": env_dict.get("USER_NAME", ""),
         },
     }
@@ -6911,6 +7071,131 @@ async def api_save_preferences(body: PreferencesUpdate):
     except ValueError as e:
         return JSONResponse({"success": False, "error": str(e)}, status_code=400)
     return {"success": True}
+
+# ---------------------------------------------------------------------------
+# Routines — a phrase or an event that runs fixed steps (see routines.py)
+# ---------------------------------------------------------------------------
+
+async def _run_routine(routine: dict) -> None:
+    """Run one routine's steps in order. A step that fails ends the routine
+    and says so — the rest assumed it had worked."""
+    if speech is None:
+        return
+    for step in routine["steps"]:
+        kind = step["kind"]
+        try:
+            if kind == "say":
+                await speech.say(step["text"], Priority.NORMAL)
+            elif kind == "wait":
+                await asyncio.sleep(step["seconds"])
+            elif kind == "ask":
+                await _handle_utterance(step["text"])
+            elif kind == "run":
+                # By name, resolved now: the routine file names a project the
+                # user picked, never a path, so a hand edit cannot point a
+                # --dangerously-skip-permissions run at an arbitrary folder.
+                projects = await scan_projects()
+                match = next((p for p in projects if p["name"] == step["project"]), None)
+                if match is None:
+                    await speech.say(f"Não encontrei o projeto {step['project']}.",
+                                     Priority.NORMAL)
+                    return
+                await run_executor_instance.spawn(
+                    step["text"], match["name"], match["path"], "routine")
+        except Exception as e:
+            log.warning(f"Routine {routine['name']!r} failed at {kind}: {e}")
+            await speech.say(f"A rotina {routine['name']} falhou.", Priority.NORMAL)
+            return
+
+
+@app.get("/api/connections")
+async def api_connections():
+    """The user's declared MCP servers, for the painel's Fontes de Dados.
+
+    Names, state and tool counts only. An entry's command, url and env are
+    never sent: env is where the user's tokens live.
+    """
+    brain = brain_instance
+    connected = set(getattr(brain, "connected_servers", []) or [])
+    failed = set(getattr(brain, "failed_servers", []) or [])
+    declared = declared_connections()
+    servers = []
+    for name in sorted(declared.servers):
+        if name in failed:
+            state = "failed"
+        elif name in connected:
+            state = "connected"
+        else:
+            state = "declared"
+        tools = list(getattr(brain, "tools_from", lambda _n: [])(name)) if brain else []
+        servers.append({"name": name, "state": state, "tools": len(tools)})
+    return {"path": str(data_paths.connections_path()), "servers": servers,
+            "problems": list(declared.problems)}
+
+
+@app.get("/api/routines")
+async def api_list_routines():
+    return {"routines": routines.load(), "events": list(routines.EVENTS),
+            "step_kinds": list(routines.STEP_KINDS)}
+
+
+@app.post("/api/routines")
+async def api_save_routine(request: Request):
+    try:
+        routine = routines.upsert(await request.json())
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    return {"routine": routine}
+
+
+@app.delete("/api/routines/{routine_id}")
+async def api_delete_routine(routine_id: str):
+    if not routines.delete(routine_id):
+        return JSONResponse(status_code=404, content={"error": "Routine not found"})
+    return {"deleted": routine_id}
+
+
+@app.post("/api/routines/{routine_id}/run")
+async def api_run_routine(routine_id: str):
+    routine = next((r for r in routines.load() if r["id"] == routine_id), None)
+    if routine is None:
+        return JSONResponse(status_code=404, content={"error": "Routine not found"})
+    _spawn(_run_routine(routine))
+    return {"started": routine_id}
+
+
+# ---------------------------------------------------------------------------
+# Health watch — Apple Health samples pushed by an iPhone Shortcut (health.py)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/saude")
+async def api_saude():
+    """The painel's Saúde view. Never the token: that needs a POST."""
+    port = health_watch.ingest_port()
+    return {
+        "enabled": port is not None,
+        "port": port,
+        "addresses": await asyncio.to_thread(health_watch.lan_addresses) if port else [],
+        "metrics": {k: {"label": v[0], "unit": v[1], "kind": v[2]}
+                    for k, v in health_watch.METRICS.items()},
+        "latest": await asyncio.to_thread(health_watch.latest),
+        "days": await asyncio.to_thread(health_watch.daily, 7),
+        "last_received": await asyncio.to_thread(health_watch.last_received),
+    }
+
+
+@app.post("/api/saude/token")
+async def api_saude_token(request: Request):
+    """Show the Shortcut's token, or replace it with {"rotate": true}.
+
+    A POST so web_auth's Origin gate applies: a hostile page can neither
+    trigger it nor, with no CORS, read the answer.
+    """
+    body = await request.json() if await request.body() else {}
+    rotate = isinstance(body, dict) and body.get("rotate") is True
+    token = health_watch.rotate_token() if rotate else health_watch.ensure_token()
+    return {"token": token}
+
 
 # ---------------------------------------------------------------------------
 # Control endpoints (restart)
@@ -6950,6 +7235,10 @@ if FRONTEND_DIST.exists():
     @app.get("/dashboard")
     async def serve_dashboard():
         return FileResponse(str(FRONTEND_DIST / "dashboard.html"))
+
+    @app.get("/painel")
+    async def serve_painel():
+        return FileResponse(str(FRONTEND_DIST / "painel.html"))
 
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
 
