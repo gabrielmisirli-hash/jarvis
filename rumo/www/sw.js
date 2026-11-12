@@ -6,7 +6,16 @@ importScripts('precache-manifest.js');
 const { version, files } = self.__PRECACHE;
 const CACHE = `rumo-${version}`;
 const scopeUrl = (path) => new URL(path, self.registration.scope).href;
-const INDEX_URL = scopeUrl('index.html');
+// A página do app é guardada pela raiz ("./"). O Cloudflare Pages redireciona /index.html para /,
+// e o Safari e o Chrome recusam abrir uma página que o service worker entrega vinda de redirecionamento.
+const INDEX_URL = scopeUrl('./');
+
+// Recria a resposta sem a marca de redirecionamento (protege contra respostas antigas no cache).
+async function withoutRedirect(res) {
+  if (!res.redirected) return res;
+  const body = await res.blob();
+  return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+}
 
 self.addEventListener('install', (event) => {
   // cache: 'reload' ignora o cache HTTP do navegador: nunca guardar arquivo velho sob a versão nova.
@@ -34,7 +43,7 @@ self.addEventListener('fetch', (event) => {
   // Pacotes de mapa vão direto para o IndexedDB: não duplicar no cache.
   if (url.pathname.includes('/maps/')) return;
   if (req.mode === 'navigate') {
-    event.respondWith(caches.match(INDEX_URL).then((cached) => cached || fetch(req)));
+    event.respondWith(caches.match(INDEX_URL).then((cached) => (cached ? withoutRedirect(cached) : fetch(req))));
     return;
   }
   event.respondWith(caches.match(req, { ignoreSearch: true }).then((cached) => cached || fetch(req)));

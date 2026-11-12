@@ -1,6 +1,6 @@
 // Gerado por tools/build-sw.mjs — não edite à mão.
 self.__PRECACHE = {
- "version": "725dfd6becaf",
+ "version": "a79ebdb506d4",
  "files": [
   "./",
   "css/app.css",
@@ -8,7 +8,6 @@ self.__PRECACHE = {
   "icons/icon-192.png",
   "icons/icon-512.png",
   "icons/icon-maskable-512.png",
-  "index.html",
   "js/app.js",
   "js/audio.js",
   "js/compass-sensor.js",
