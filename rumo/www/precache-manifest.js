@@ -1,6 +1,6 @@
 // Gerado por tools/build-sw.mjs — não edite à mão.
 self.__PRECACHE = {
- "version": "a79ebdb506d4",
+ "version": "842b5596927f",
  "files": [
   "./",
   "css/app.css",

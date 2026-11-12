@@ -3,7 +3,7 @@
 import { h, sheet, toast, shareText, field } from '../ui.js';
 import { getState } from '../state.js';
 import { getPosition, getLastFix } from '../location.js';
-import { buildMessage, smsHref, telHref } from '../lib/messages.js';
+import { buildMessage, smsHref, telHref, whatsappHref, devicePlatform } from '../lib/messages.js';
 import { toMorse, SOS } from '../lib/morse.js';
 import { showBigCoords, flashMorse } from '../overlays.js';
 import { startWhistle, stopSound, playMorse, isPlaying, onSoundChange } from '../audio.js';
@@ -39,12 +39,17 @@ function openMessageSheet({ template, title, intro, onlySos = false, withExtra =
   const extra = withExtra ? h('input', { type: 'text', placeholder: 'Ex.: perna machucada, 3 pessoas, sem água', maxlength: 120 }) : null;
   const gpsStatus = h('div', { class: 'small muted' });
   const preview = h('div', { class: 'card small', style: 'white-space:pre-wrap;word-break:break-word;margin:0' });
-  const smsLink = h('a', { class: `btn btn-block ${danger ? 'btn-danger' : 'btn-primary'}`, text: 'Abrir SMS agora' });
+  // No computador não há SMS: o WhatsApp vira o botão principal.
+  const onDesktop = devicePlatform() === 'desktop';
+  const mainClass = `btn btn-block ${danger ? 'btn-danger' : 'btn-primary'}`;
+  const smsLink = h('a', { class: onDesktop ? 'btn btn-block' : mainClass, text: onDesktop ? 'Abrir SMS (funciona no celular)' : 'Abrir SMS agora' });
+  const waLink = h('a', { class: onDesktop ? mainClass : 'btn btn-block', target: '_blank', rel: 'noopener', text: 'Enviar pelo WhatsApp' });
   const contacts = recipientsOf(onlySos);
   const render = () => {
     const body = buildMessage({ template, position, extra: extra?.value || '' });
     preview.textContent = body;
     smsLink.href = smsHref(contacts.map((c) => c.phone), body);
+    waLink.href = whatsappHref(body);
     gpsStatus.textContent = position
       ? `📡 Posição ±${Math.round(position.accuracy)} m, lida ${ageText(position.time)}${Date.now() - position.time > FRESH_FIX_MS ? ' (buscando uma mais nova…)' : ''}`
       : '📡 Buscando GPS… Pode enviar já: a mensagem vai sem posição.';
@@ -63,7 +68,9 @@ function openMessageSheet({ template, title, intro, onlySos = false, withExtra =
     intro ? h('p', { text: intro }) : null,
     extra ? field('Detalhe (opcional)', extra) : null,
     h('div', { class: 'small', text: contacts.length ? `Para: ${contacts.map((c) => c.name).join(', ')}` : 'Sem contatos cadastrados: você escolhe no app Mensagens. Cadastre em Preparo › Plano familiar.' }),
-    gpsStatus, preview, smsLink,
+    gpsStatus, preview,
+    ...(onDesktop ? [waLink, smsLink] : [smsLink, waLink]),
+    h('p', { class: 'small muted', text: 'WhatsApp: escolha o contato ou o grupo da família; precisa de internet. O SMS sai do celular mesmo sem internet.' }),
     h('button', { class: 'btn btn-block', type: 'button', text: 'Compartilhar por outro app', on: { click: () => shareText(preview.textContent) } }),
   ));
 }
