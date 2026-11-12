@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "name": "rio",
+  "label": "Rio de Janeiro e arredores",
+  "bbox": [
+    -43.8,
+    -23.1,
+    -42.7,
+    -22.4
+  ],
+  "center": [
+    -43.1729,
+    -22.9068
+  ],
+  "maxZoom": 15,
+  "declination": -23,
+  "source": "20261109.pmtiles",
+  "attribution": "© OpenStreetMap (ODbL) · Protomaps",
+  "createdAt": "2026-11-10T03:07:27.377Z",
+  "size": 46227104,
+  "parts": [
+    {
+      "file": "part-000.bin",
+      "size": 19922944,
+      "sha256": "06234a76ab3baea21e050a5d5d7241489058de5f4563cb22769e7770729d2c8f"
+    },
+    {
+      "file": "part-001.bin",
+      "size": 19922944,
+      "sha256": "3aef9897371ef4a28df7be14deb044f90cdfe8af9f36bb1ab995ca5cb440297a"
+    },
+    {
+      "file": "part-002.bin",
+      "size": 6381216,
+      "sha256": "4cdbff408ed317c70a8aab946bcf93902dbe15734b5fcbb5fbfe2e667dc399c0"
+    }
+  ]
+}

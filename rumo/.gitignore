@@ -1,0 +1,3 @@
+# Pedaços do mapa do Rio (46 MB): ficam fora do Git.
+# Para recuperar, rode ./baixar-mapa.sh
+www/maps/*/part-*.bin

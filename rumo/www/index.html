@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Rumo · Sobrevivência</title>
+  <meta name="description" content="Guia de sobrevivência offline: mapa, bússola, SOS, primeiros socorros e plano familiar.">
+  <meta name="theme-color" content="#0b0d0e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Rumo">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="vendor/pmtiles.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Rumo</div>
+    <div class="status" id="status">
+      <span class="chip" id="net-chip">…</span>
+      <button class="chip chip-btn" id="critical-btn" type="button" aria-pressed="false" title="Modo bateria crítica">🔋</button>
+    </div>
+  </header>
+  <div id="banners"></div>
+  <main id="views">
+    <section id="tab-mapa" class="view view-map" hidden></section>
+    <section id="tab-bussola" class="view" hidden></section>
+    <section id="tab-sos" class="view" hidden></section>
+    <section id="tab-guias" class="view" hidden></section>
+    <section id="tab-preparo" class="view" hidden></section>
+  </main>
+  <nav class="tabbar" aria-label="Navegação principal">
+    <a href="#mapa" data-tab="mapa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3Zm0 2.2 6 3v10.6l-6-3V5.2Z"/></svg><span>Mapa</span></a>
+    <a href="#bussola" data-tab="bussola"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm4.5 3.5-6.4 2.6-2.6 6.4 6.4-2.6 2.6-6.4ZM12 10.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8Z"/></svg><span>Bússola</span></a>
+    <a href="#sos" data-tab="sos" class="tab-sos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 1 21h22L12 2Zm0 5.5 7.5 11.5h-15L12 7.5ZM11 11v4h2v-4h-2Zm0 5v2h2v-2h-2Z"/></svg><span>SOS</span></a>
+    <a href="#guias" data-tab="guias"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h7a3 3 0 0 1 1 .2A3 3 0 0 1 13 3h7v16h-7a2 2 0 0 0-1 .3 2 2 0 0 0-1-.3H4V3Zm2 2v12h5l.5.1V6a1 1 0 0 0-1-1H6Zm7.5 1v11.1l.5-.1h4V5h-3.5a1 1 0 0 0-1 1Z"/></svg><span>Guias</span></a>
+    <a href="#preparo" data-tab="preparo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h6v2h5v18H4V4h5V2Zm2 2v2h2V4h-2ZM6 6v14h12V6h-3v2H9V6H6Zm2.3 7.3 1.4-1.4 1.8 1.8 4.3-4.3 1.4 1.4-5.7 5.7-3.2-3.2Z"/></svg><span>Preparo</span></a>
+  </nav>
+  <div id="sheet-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+  <div id="print-kit" aria-hidden="true"></div>
+  <noscript><p class="noscript">Ative o JavaScript para usar o app.</p></noscript>
+</body>
+</html>
