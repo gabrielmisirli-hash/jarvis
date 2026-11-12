@@ -1,0 +1,53 @@
+# Publica o app Rumo (rumo/www) no Cloudflare Pages a cada mudança em rumo/ neste branch.
+# Precisa do segredo CLOUDFLARE_API_TOKEN no repositório (Settings → Secrets and variables → Actions),
+# com permissão de editar o Cloudflare Pages.
+name: Publicar Rumo
+
+on:
+  push:
+    branches: [claude/remote-survivalism-app-access-2fxdix]
+    paths: ['rumo/**', '.github/workflows/rumo-deploy.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: rumo-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar os pedaços do mapa (ficam fora do Git)
+        run: rumo/baixar-mapa.sh
+
+      - name: Conferir a lista de arquivos offline
+        run: |
+          node rumo/tools/build-sw.mjs
+          git diff --exit-code rumo/www/precache-manifest.js || {
+            echo "precache-manifest.js está desatualizado: rode node rumo/tools/build-sw.mjs e salve de novo."; exit 1; }
+
+      - name: Publicar no Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 1d39f57e00f0102c4032d4655a929cd9
+          WRANGLER_SEND_METRICS: 'false'
+          COMMIT_MSG: ${{ github.event.head_commit.message || 'Publicação manual' }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Falta o segredo CLOUDFLARE_API_TOKEN no repositório."; exit 1; fi
+          npx --yes wrangler@3.99.0 pages deploy rumo/www \
+            --project-name=rumo-sobrevivencia --branch=main --commit-dirty=true \
+            --commit-message="$(printf '%s' "$COMMIT_MSG" | head -n1)"
+
+      - name: Conferir que o site publicado está nesta versão
+        run: |
+          want=$(grep -o '"version": "[0-9a-f]*"' rumo/www/precache-manifest.js)
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS "https://rumo-sobrevivencia.pages.dev/precache-manifest.js?t=$i$RANDOM" | grep -q "$want"; then
+              echo "No ar: $want"; exit 0; fi
+            sleep 5
+          done
+          echo "O site publicado ainda não mostra $want"; exit 1
