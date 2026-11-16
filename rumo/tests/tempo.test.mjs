@@ -195,11 +195,30 @@ test('rodada: avisa uma vez, sobe de nível, libera quando passa e apaga inscri�
   pushStatus = 410;
   s = await runCheck(env, { now: now + 60 * 60000, fetchFn });
   assert.equal(s.removed, 1, 'aparelho desinstalou: inscrição apagada');
-  assert.equal(env.ALERTAS.map.size, 0);
+  assert.equal([...env.ALERTAS.map.keys()].filter((k) => k.startsWith('sub:')).length, 0);
 });
 
 test('não repete o mesmo nível antes de 3 horas', () => {
   const a = { level: 1, start: BASE + 5 * H };
   assert.equal(shouldNotify({ key: `1|${BASE + H}`, level: 1, at: BASE }, a, BASE + 2 * H), false);
   assert.equal(shouldNotify({ key: `1|${BASE + H}`, level: 1, at: BASE }, a, BASE + 3 * H), true);
+});
+
+test('resumo de uso: só números, antes e depois da rodada', async () => {
+  const jwk = await makeVapid();
+  const env = { ALERTAS: fakeKv(), VAPID_PRIVATE_JWK: JSON.stringify(jwk) };
+  for (const [i, lat] of [[1, -22.91], [2, -22.91], [3, -22.95]]) {
+    const browser = await makeBrowserKeys();
+    await handleRequest(post('inscrever', { subscription: { endpoint: `https://web.push.apple.com/x${i}`, keys: browser.keys }, lat, lon: -43.17, label: `Casa ${i}` }), env);
+  }
+  const before = await (await handleRequest(new Request('https://x/api/alertas/resumo'), env)).json();
+  assert.deepEqual([before.aparelhosComAvisos, before.locaisDiferentes, before.novosNasUltimas24h, before.ultimaVerificacao], [3, 2, 3, null]);
+  const fetchFn = async () => ({ ok: true, status: 200, json: async () => omResponse([hour(0, 0, 5, 1)]) });
+  await runCheck(env, { now: Date.now(), fetchFn });
+  const after = await (await handleRequest(new Request('https://x/api/alertas/resumo'), env)).json();
+  assert.equal(after.aparelhosComAvisos, 3);
+  assert.equal(after.locaisDiferentes, 2);
+  assert.ok(after.ultimaVerificacao);
+  assert.ok(!JSON.stringify(after).includes('Casa'), 'resumo não expõe nomes nem locais');
+  assert.ok(!JSON.stringify(after).includes('-22.9'), 'resumo não expõe coordenadas');
 });

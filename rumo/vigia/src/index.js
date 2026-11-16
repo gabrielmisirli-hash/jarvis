@@ -16,6 +16,8 @@ const TEST_COOLDOWN_MS = 60 * 1000;
 const REPEAT_MS = 3 * 60 * 60 * 1000; // o mesmo nível só se repete depois de 3 h
 // O plano gratuito do Cloudflare permite 50 chamadas externas por execução; o resto fica para a próxima rodada.
 const MAX_CALLS_PER_RUN = 45;
+const SUMMARY_KEY = 'meta:resumo';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -82,6 +84,28 @@ async function unsubscribe(request, env) {
   return json({ ok: true });
 }
 
+/** Quantos aparelhos usam os avisos, sem dado pessoal. Lê o resumo da última rodada (barato). */
+async function usageSummary(env) {
+  let s = await env.ALERTAS.get(SUMMARY_KEY, 'json');
+  if (!s) { // antes da primeira rodada: conta na hora
+    const records = await listRecords(env.ALERTAS);
+    const now = Date.now();
+    s = {
+      subscribers: records.length,
+      places: new Set(records.map(({ record }) => `${record.lat},${record.lon}`)).size,
+      newLast24h: records.filter(({ record }) => now - (record.createdAt || 0) < DAY_MS).length,
+      at: null,
+    };
+  }
+  return json({
+    aparelhosComAvisos: s.subscribers,
+    locaisDiferentes: s.places,
+    novosNasUltimas24h: s.newLast24h ?? null,
+    ultimaVerificacao: s.at ? new Date(s.at).toISOString() : null,
+    avisosEnviadosNaUltimaVerificacao: s.sent ?? null,
+  });
+}
+
 async function sendTest(request, env) {
   const { endpoint } = await readBody(request);
   if (typeof endpoint !== 'string') return json({ error: 'endereço ausente' }, 400);
@@ -107,6 +131,7 @@ export async function handleRequest(request, env) {
   const path = new URL(request.url).pathname.replace(/\/+$/, '');
   try {
     if (request.method === 'GET' && path.endsWith('/api/alertas/chave')) return json({ publicKey: vapidPublicKey(jwkFrom(env)) });
+    if (request.method === 'GET' && path.endsWith('/api/alertas/resumo')) return await usageSummary(env);
     if (request.method === 'POST' && path.endsWith('/api/alertas/inscrever')) return await subscribe(request, env);
     if (request.method === 'POST' && path.endsWith('/api/alertas/cancelar')) return await unsubscribe(request, env);
     if (request.method === 'POST' && path.endsWith('/api/alertas/teste')) return await sendTest(request, env);
@@ -199,6 +224,10 @@ export async function runCheck(env, { now = Date.now(), fetchFn = fetch } = {}) 
       }
     }
   }
+  summary.newLast24h = records.filter(({ record }) => now - (record.createdAt || 0) < DAY_MS).length;
+  summary.at = now;
+  // Resumo só com números, para o dono do app ver se alguém está usando. Sem locais nem nomes.
+  await env.ALERTAS.put(SUMMARY_KEY, JSON.stringify(summary));
   console.log('[vigia] rodada', JSON.stringify(summary));
   return summary;
 }
