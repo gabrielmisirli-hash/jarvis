@@ -28,7 +28,7 @@ export function showBigCoords(fix) {
     h('div', { class: 'small', text: 'MINHA POSIÇÃO' }),
     h('div', { class: 'huge mono', text: formatDecimal(fix.lat, fix.lon) }),
     h('div', { class: 'huge', style: 'font-size:clamp(1.3rem,6vw,2.2rem)', text: `${toDMS(fix.lat, true)}  ${toDMS(fix.lon, false)}` }),
-    h('div', { text: `Precisão ±${Math.round(fix.accuracy)} m · ${formatStamp(new Date(fix.time))}` }),
+    h('div', { text: Number.isFinite(fix.accuracy) ? `Precisão ±${Math.round(fix.accuracy)} m · ${formatStamp(new Date(fix.time))}` : `Local fixo deste aparelho: ${fix.label || ''}` }),
   ));
 }
 

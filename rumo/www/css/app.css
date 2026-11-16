@@ -298,3 +298,6 @@ ul.dont li { margin-bottom: .35em; }
 .wx-hour.lvl-1 { box-shadow: inset 4px 0 0 var(--lvl-1); }
 .wx-hour.lvl-2 { box-shadow: inset 4px 0 0 var(--lvl-2); }
 .wx-hour.lvl-3 { box-shadow: inset 4px 0 0 var(--lvl-3); }
+
+/* Aviso discreto num cartão (ex.: computador sem local fixo) */
+.card-warn { border-color: var(--accent); background: var(--warn-bg); }

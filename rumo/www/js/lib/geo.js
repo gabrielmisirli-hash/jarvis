@@ -109,3 +109,18 @@ export function compassCorrection(start, end, headings, minMeters = 25) {
   if (headings.length < 3) throw new Error('Poucas leituras da bússola');
   return Math.round(signedDelta(bearingDeg(start, end), circularMeanDeg(headings)));
 }
+
+/**
+ * Lê coordenadas coladas: "-22.87644, -43.24371" (o que o Google Maps copia), um link do
+ * Google Maps (".../@-22.876,-43.243,17z" ou "?q=-22.876,-43.243") ou vírgula decimal
+ * ("-22,87644 -43,24371"). Devolve { lat, lon } ou null.
+ */
+export function parseCoords(text) {
+  const s = String(text || '');
+  const valid = (lat, lon) => (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null);
+  const dotted = s.match(/-?\d{1,3}\.\d+/g);
+  if (dotted && dotted.length >= 2) return valid(Number(dotted[0]), Number(dotted[1]));
+  const comma = s.match(/(-?\d{1,3},\d+)\s*[;\s]\s*(-?\d{1,3},\d+)/);
+  if (comma) return valid(Number(comma[1].replace(',', '.')), Number(comma[2].replace(',', '.')));
+  return null;
+}

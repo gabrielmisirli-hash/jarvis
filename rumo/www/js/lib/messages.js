@@ -20,10 +20,18 @@ export function mapsLink(lat, lon) {
   return `https://maps.google.com/?q=${lat.toFixed(5)},${lon.toFixed(5)}`;
 }
 
-/** Monta o texto completo: aviso + posição em dois formatos + horário + link. */
-export function buildMessage({ template, position, when = new Date(), extra = '' }) {
+/**
+ * Monta o texto completo: aviso + posição em dois formatos + horário + link.
+ * Com `fixed` (local fixo de um computador, que não tem GPS), usa o local cadastrado e o endereço.
+ */
+export function buildMessage({ template, position, when = new Date(), extra = '', fixed = null }) {
   const head = TEMPLATES[template] || template;
-  const note = extra.trim() ? ` ${extra.trim()}` : '';
+  const detail = extra.trim();
+  const note = detail ? ` ${/[.!?]$/.test(detail) ? detail : `${detail}.`}` : '';
+  if (fixed) {
+    const where = [fixed.label, fixed.address].filter((x) => x && String(x).trim()).join(': ');
+    return `${head}${note} Estou em ${where || 'local fixo'}. Coordenadas: ${formatDecimal(fixed.lat, fixed.lon)} (${toDMS(fixed.lat, true)} ${toDMS(fixed.lon, false)}) às ${formatStamp(when)}. ${mapsLink(fixed.lat, fixed.lon)}`;
+  }
   if (!position) return `${head}${note} (sem GPS agora) ${formatStamp(when)}.`;
   const { lat, lon, accuracy } = position;
   const acc = Number.isFinite(accuracy) ? ` ±${Math.round(accuracy)} m` : '';
