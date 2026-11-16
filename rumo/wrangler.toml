@@ -1,0 +1,8 @@
+# Cloudflare Pages: o site (www/) e a função que encaminha /api/alertas/* ao vigia.
+name = "rumo-sobrevivencia"
+pages_build_output_dir = "www"
+compatibility_date = "2024-11-01"
+
+[[services]]
+binding = "VIGIA"
+service = "rumo-vigia"

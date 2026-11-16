@@ -4,6 +4,10 @@
   --bg: #0b0d0e;
   --surface: #15191b;
   --surface-2: #1f2629;
+  --lvl-1: #ffd60a;
+  --lvl-2: #ff9f0a;
+  --lvl-3: #ff453a;
+  --lvl-text: #1a1200;
   --border: #2c3539;
   --text: #f2f4f5;
   --muted: #9aa6ac;
@@ -36,6 +40,9 @@
   --ok: #157a2c;
   --info: #005a8c;
   --warn-bg: #fff1c2;
+  --lvl-1: #e0b400;
+  --lvl-2: #e07800;
+  --lvl-3: #c4161c;
   color-scheme: light;
 }
 :root[data-theme="critical"] {
@@ -52,6 +59,10 @@
   --ok: #ff3b30;
   --info: #ff3b30;
   --warn-bg: #1a0000;
+  --lvl-1: #ff3b30;
+  --lvl-2: #ff3b30;
+  --lvl-3: #ff3b30;
+  --lvl-text: #000000;
 }
 :root[data-theme="critical"] * { animation: none !important; transition: none !important; }
 
@@ -264,3 +275,26 @@ ul.dont li { margin-bottom: .35em; }
   #print-kit td, #print-kit th { border: 1px solid #000; padding: 3pt 5pt; text-align: left; vertical-align: top; }
   #print-kit img { max-width: 100%; border: 1px solid #000; }
 }
+
+/* Tempo: selo no topo, alerta e previsão hora a hora */
+.weather-chip.lvl-1 { background: var(--lvl-1); border-color: var(--lvl-1); color: var(--lvl-text); font-weight: 700; }
+.weather-chip.lvl-2 { background: var(--lvl-2); border-color: var(--lvl-2); color: var(--lvl-text); font-weight: 700; }
+.weather-chip.lvl-3 { background: var(--lvl-3); border-color: var(--lvl-3); color: #ffffff; font-weight: 700; }
+:root[data-theme="critical"] .weather-chip.lvl-3 { color: #000000; }
+.wx-alert { border-width: 2px; }
+.wx-alert.lvl-1 { border-color: var(--lvl-1); }
+.wx-alert.lvl-2 { border-color: var(--lvl-2); }
+.wx-alert.lvl-3 { border-color: var(--lvl-3); }
+.wx-alert p { margin: 0 0 10px; }
+.wx-now { display: flex; gap: 14px; align-items: center; }
+.wx-big { font-size: 2.6rem; line-height: 1; }
+.wx-temp { font-size: 1.6rem; font-weight: 800; }
+.wx-hour {
+  display: grid; grid-template-columns: 2.6em 1.6em 2.4em 1fr auto; gap: 8px; align-items: center;
+  padding: 8px 0 8px 8px; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; font-size: .9rem;
+}
+.wx-hour .wx-h { font-weight: 700; }
+.wx-hour .wx-rain, .wx-hour .wx-gust { color: var(--muted); }
+.wx-hour.lvl-1 { box-shadow: inset 4px 0 0 var(--lvl-1); }
+.wx-hour.lvl-2 { box-shadow: inset 4px 0 0 var(--lvl-2); }
+.wx-hour.lvl-3 { box-shadow: inset 4px 0 0 var(--lvl-3); }

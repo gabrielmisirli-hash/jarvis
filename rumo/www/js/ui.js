@@ -44,6 +44,18 @@ export function toast(message, kind = 'info', ms = 2800) {
 }
 
 /** Folha inferior modal. Retorna { close }. */
+/** Faixa de aviso abaixo da barra superior. Devolve o elemento (para remover depois, se quiser). */
+export function banner(text, actionLabel, onAction, { id } = {}) {
+  const root = document.getElementById('banners');
+  if (id) root.querySelector(`[data-banner="${id}"]`)?.remove();
+  const el = h('div', { class: 'banner', role: 'status', dataset: id ? { banner: id } : undefined },
+    h('span', { class: 'grow', text }),
+    actionLabel ? h('button', { class: 'btn btn-sm btn-primary', type: 'button', text: actionLabel, on: { click: () => { onAction(); el.remove(); } } }) : null,
+    h('button', { class: 'btn btn-sm btn-ghost', type: 'button', 'aria-label': 'Fechar aviso', text: '✕', on: { click: () => el.remove() } }));
+  root.append(el);
+  return el;
+}
+
 export function sheet(title, content, { onClose } = {}) {
   const root = document.getElementById('sheet-root');
   const close = () => {

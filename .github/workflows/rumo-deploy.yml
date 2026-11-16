@@ -1,6 +1,8 @@
-# Publica o app Rumo (rumo/www) no Cloudflare Pages a cada mudança em rumo/ neste branch.
+# Publica o app Rumo no Cloudflare a cada mudança em rumo/ neste branch:
+#   - o vigia (Worker "rumo-vigia"): confere a previsão a cada 15 min e manda os avisos de tempo;
+#   - o site (Pages "rumo-sobrevivencia"), com a função que encaminha /api/alertas/* ao vigia.
 # Precisa do segredo CLOUDFLARE_API_TOKEN no repositório (Settings → Secrets and variables → Actions),
-# com permissão de editar o Cloudflare Pages.
+# com permissão de editar Workers, Workers KV e Cloudflare Pages.
 name: Publicar Rumo
 
 on:
@@ -13,12 +15,21 @@ concurrency:
   group: rumo-deploy
   cancel-in-progress: false
 
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 1d39f57e00f0102c4032d4655a929cd9
+  WRANGLER_SEND_METRICS: 'false'
+  WRANGLER: npx --yes wrangler@3.99.0
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Testes do alerta de tempo e do vigia
+        run: node --test rumo/tests/*.test.mjs
 
       - name: Baixar os pedaços do mapa (ficam fora do Git)
         run: rumo/baixar-mapa.sh
@@ -29,25 +40,58 @@ jobs:
           git diff --exit-code rumo/www/precache-manifest.js || {
             echo "precache-manifest.js está desatualizado: rode node rumo/tools/build-sw.mjs e salve de novo."; exit 1; }
 
-      - name: Publicar no Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 1d39f57e00f0102c4032d4655a929cd9
-          WRANGLER_SEND_METRICS: 'false'
-          COMMIT_MSG: ${{ github.event.head_commit.message || 'Publicação manual' }}
+      - name: Conferir o token
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "Falta o segredo CLOUDFLARE_API_TOKEN no repositório."; exit 1; fi
-          npx --yes wrangler@3.99.0 pages deploy rumo/www \
-            --project-name=rumo-sobrevivencia --branch=main --commit-dirty=true \
+
+      - name: Garantir o banco dos avisos (KV "rumo-alertas")
+        id: kv
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/storage/kv/namespaces"
+          auth="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+          id=$(curl -fsS -H "$auth" "$api?per_page=100" | jq -r '.result[] | select(.title=="rumo-alertas") | .id')
+          if [ -z "$id" ]; then
+            id=$(curl -fsS -X POST -H "$auth" -H 'Content-Type: application/json' --data '{"title":"rumo-alertas"}' "$api" | jq -r '.result.id')
+            echo "Banco criado."
+          fi
+          test -n "$id" && test "$id" != "null"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar o vigia (Worker, rodada a cada 15 min)
+        working-directory: rumo/vigia
+        run: |
+          sed "s/__KV_ID__/${{ steps.kv.outputs.id }}/" wrangler.toml.template > wrangler.toml
+          $WRANGLER deploy
+
+      - name: Garantir as chaves de notificação (geradas uma vez, nunca impressas)
+        working-directory: rumo/vigia
+        run: |
+          # Se a listagem falhar, o passo para: nunca troca a chave por engano (isso desligaria os avisos de todos).
+          secrets=$($WRANGLER secret list)
+          if grep -q VAPID_PRIVATE_JWK <<<"$secrets"; then
+            echo "Chaves já existem."
+          else
+            node ../tools/gerar-vapid.mjs | $WRANGLER secret put VAPID_PRIVATE_JWK
+            echo "Chaves criadas."
+          fi
+
+      - name: Publicar o site (Pages) com o encaminhador /api/alertas
+        working-directory: rumo
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message || 'Publicação manual' }}
+        run: |
+          $WRANGLER pages deploy www --project-name=rumo-sobrevivencia --branch=main --commit-dirty=true \
             --commit-message="$(printf '%s' "$COMMIT_MSG" | head -n1)"
 
-      - name: Conferir que o site publicado está nesta versão
+      - name: Conferir o site e o vigia no ar
         run: |
           want=$(grep -o '"version": "[0-9a-f]*"' rumo/www/precache-manifest.js)
-          for i in 1 2 3 4 5 6; do
-            if curl -fsS "https://rumo-sobrevivencia.pages.dev/precache-manifest.js?t=$i$RANDOM" | grep -q "$want"; then
-              echo "No ar: $want"; exit 0; fi
+          for i in $(seq 1 12); do
+            site=$(curl -fsS "https://rumo-sobrevivencia.pages.dev/precache-manifest.js?t=$i$RANDOM" || true)
+            key=$(curl -fsS "https://rumo-sobrevivencia.pages.dev/api/alertas/chave?t=$i$RANDOM" | jq -r '.publicKey // empty' || true)
+            if grep -q "$want" <<<"$site" && [ "${#key}" -eq 87 ]; then
+              echo "No ar: $want, vigia respondendo."; exit 0; fi
             sleep 5
           done
-          echo "O site publicado ainda não mostra $want"; exit 1
+          echo "Site ($want) ou vigia ainda não responderam como esperado."; exit 1

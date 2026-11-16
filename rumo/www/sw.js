@@ -48,3 +48,39 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(caches.match(req, { ignoreSearch: true }).then((cached) => cached || fetch(req)));
 });
+
+// Avisos de tempo enviados pelo vigia (Cloudflare). O iPhone exige que todo push mostre uma notificação.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data?.text() };
+  }
+  const title = data.title || 'Rumo: aviso de tempo';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: data.body || 'Abra o app para ver a previsão.',
+    tag: data.tag || 'rumo-tempo',
+    renotify: true,
+    requireInteraction: Boolean(data.urgent),
+    icon: scopeUrl('icons/icon-192.png'),
+    badge: scopeUrl('icons/icon-192.png'),
+    vibrate: [400, 150, 400, 150, 400], // Android; no iPhone vibra conforme os ajustes do aparelho
+    data: { url: data.url || './#tempo' },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = scopeUrl(event.notification.data?.url || './#tempo');
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      if ('focus' in client) {
+        await client.navigate?.(url).catch(() => {});
+        return client.focus();
+      }
+    }
+    return self.clients.openWindow(url);
+  })());
+});

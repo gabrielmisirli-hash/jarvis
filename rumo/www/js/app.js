@@ -1,6 +1,6 @@
 // Ponto de entrada: carrega dados, monta as telas, navega pelas abas e cuida da atualização offline.
 
-import { h, clear, toast, errorMessage } from './ui.js';
+import { h, clear, toast, errorMessage, banner } from './ui.js';
 import { loadState, getState, update, subscribe } from './state.js';
 import { onJump, setLowPower } from './location.js';
 import { initMapView, showMapView, hideMapView, reloadMap } from './views/map-view.js';
@@ -8,6 +8,7 @@ import { initCompassView, showCompassView, hideCompassView } from './views/compa
 import { initSosView, showSosView } from './views/sos-view.js';
 import { initGuidesView, showGuidesView } from './views/guides-view.js';
 import { initPrepView, showPrepView } from './views/prep-view.js';
+import { initWeather } from './weather-view.js';
 
 const TABS = ['mapa', 'bussola', 'sos', 'guias', 'preparo'];
 const DEFAULT_TAB = 'mapa';
@@ -30,15 +31,6 @@ function renderNetwork() {
   chip.textContent = online ? '● online' : '● offline';
   chip.className = `chip ${online ? 'on' : 'off'}`;
   chip.title = online ? 'Com internet: bom momento para atualizar o mapa' : 'Sem internet: tudo que foi baixado continua funcionando';
-}
-
-function banner(text, actionLabel, onAction) {
-  const root = document.getElementById('banners');
-  const el = h('div', { class: 'banner', role: 'status' },
-    h('span', { class: 'grow', text }),
-    actionLabel ? h('button', { class: 'btn btn-sm btn-primary', type: 'button', text: actionLabel, on: { click: () => { onAction(); el.remove(); } } }) : null,
-    h('button', { class: 'btn btn-sm btn-ghost', type: 'button', 'aria-label': 'Fechar aviso', text: '✕', on: { click: () => el.remove() } }));
-  root.append(el);
 }
 
 function parseHash() {
@@ -141,6 +133,7 @@ async function main() {
   sosRefresh = initSosView(document.getElementById('tab-sos'));
   initGuidesView(document.getElementById('tab-guias'));
   initPrepView(document.getElementById('tab-preparo'));
+  initWeather(document.getElementById('status')).catch((err) => console.warn('[tempo] não iniciou', err));
 
   window.addEventListener('hashchange', route);
   await route();

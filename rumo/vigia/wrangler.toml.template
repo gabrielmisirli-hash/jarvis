@@ -1,0 +1,13 @@
+# Vigia do Rumo (Cloudflare Worker). O GitHub Actions gera wrangler.toml a partir deste modelo,
+# trocando __KV_ID__ pelo banco "rumo-alertas". Sem endereço próprio: só o site fala com ele.
+name = "rumo-vigia"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+workers_dev = false
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[kv_namespaces]]
+binding = "ALERTAS"
+id = "__KV_ID__"

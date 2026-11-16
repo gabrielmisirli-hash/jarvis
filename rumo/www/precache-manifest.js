@@ -1,6 +1,6 @@
 // Gerado por tools/build-sw.mjs — não edite à mão.
 self.__PRECACHE = {
- "version": "842b5596927f",
+ "version": "a74f5782bf6e",
  "files": [
   "./",
   "css/app.css",
@@ -24,6 +24,7 @@ self.__PRECACHE = {
   "js/lib/morse.js",
   "js/lib/readiness.js",
   "js/lib/sun.js",
+  "js/lib/weather.js",
   "js/location.js",
   "js/mappack.js",
   "js/overlays.js",
@@ -39,6 +40,7 @@ self.__PRECACHE = {
   "js/views/prep-view.js",
   "js/views/print-kit.js",
   "js/views/sos-view.js",
+  "js/weather-view.js",
   "manifest.webmanifest",
   "map-assets/fonts/Noto%20Sans%20Italic/0-255.pbf",
   "map-assets/fonts/Noto%20Sans%20Italic/256-511.pbf",
