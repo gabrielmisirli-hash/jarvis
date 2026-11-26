@@ -78,7 +78,7 @@ function boxBlurInto(src: Float64Array, dst: Float64Array, width: number): void 
 export function gaussianSmooth(x: Float64Array, sigmaSamples: number): Float64Array {
   if (sigmaSamples < 0.5) return x;
   const tmp = new Float64Array(x.length);
-  let a = x, b = tmp;
+  let a: Float64Array = x, b: Float64Array = tmp;
   let first = true;
   for (const w of boxesForGauss(sigmaSamples)) {
     if (w <= 1) continue;

@@ -51,6 +51,9 @@ export interface WavInfo {
   frames: number;
   dataOffset: number;
   dataBytes: number;
+  /** tamanho do bloco data declarado no cabeçalho (permite validar lendo só o início do arquivo) */
+  declaredDataBytes: number;
+  declaredFrames: number;
 }
 
 export function parseWavHeader(u8: Uint8Array): WavInfo {
@@ -58,7 +61,7 @@ export function parseWavHeader(u8: Uint8Array): WavInfo {
   const tag = (o: number) => String.fromCharCode(u8[o], u8[o + 1], u8[o + 2], u8[o + 3]);
   if (u8.length < 12 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') throw new Error('Não é um arquivo WAV (RIFF/WAVE).');
   let off = 12;
-  let fmt: Omit<WavInfo, 'frames' | 'dataOffset' | 'dataBytes'> | null = null;
+  let fmt: Omit<WavInfo, 'frames' | 'dataOffset' | 'dataBytes' | 'declaredDataBytes' | 'declaredFrames'> | null = null;
   while (off + 8 <= u8.length) {
     const id = tag(off);
     const size = dv.getUint32(off + 4, true);
@@ -74,8 +77,9 @@ export function parseWavHeader(u8: Uint8Array): WavInfo {
     } else if (id === 'data') {
       if (!fmt) throw new Error('WAV inválido: bloco data antes de fmt.');
       const dataBytes = Math.min(size, u8.length - body);
-      const frames = Math.floor(dataBytes / ((fmt.channels * fmt.bitsPerSample) / 8));
-      return { ...fmt, frames, dataOffset: body, dataBytes };
+      const bpf = (fmt.channels * fmt.bitsPerSample) / 8;
+      const frames = Math.floor(dataBytes / bpf);
+      return { ...fmt, frames, dataOffset: body, dataBytes, declaredDataBytes: size, declaredFrames: Math.floor(size / bpf) };
     }
     off = body + size + (size & 1);
   }

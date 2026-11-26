@@ -68,6 +68,7 @@ export function makeWindow(kind: WindowKind, n: number): Float64Array {
 }
 
 export interface StftParams {
+  /** potência de 2; 0 = multirresolução (janela escolhida por frequência) */
   nfft: number;
   hop: number;
   window: WindowKind;
@@ -154,32 +155,66 @@ export interface ViewParams {
   palette: Palette;
 }
 
+/**
+ * Espectrograma multirresolução: várias STFTs alinhadas (mesmo salto, centradas) e,
+ * para cada frequência, a janela mais curta cuja resolução separa as linhas vizinhas
+ * do mapeamento. Continua sendo análise do áudio (sem usar o BMP).
+ */
+export function stftMulti(x: Float32Array, sampleRate: number, hop: number, window: WindowKind, sizes = [256, 512, 1024, 2048, 4096]): Spectrogram[] {
+  return sizes.map((nfft) => stft(x, sampleRate, { nfft, hop, window }));
+}
+
+/**
+ * Índice FRACIONÁRIO da STFT a usar para cada frequência, dado o espaçamento local entre
+ * linhas (Hz). O valor fracionário mistura STFTs vizinhas e evita "costuras" visíveis.
+ * Pressupõe tamanhos em progressão de 2x.
+ */
+export function pickByRowSpacing(specs: Spectrogram[], spacingAt: (hz: number) => number, factor = 1): (hz: number) => number {
+  const n0 = specs[0].nfft, sr = specs[0].sampleRate;
+  return (hz: number) => {
+    const need = spacingAt(hz) * factor; // largura do bin <= fator x espaçamento entre linhas
+    const ideal = sr / Math.max(need, 1e-6);
+    return Math.min(specs.length - 1, Math.max(0, Math.log2(ideal / n0)));
+  };
+}
+
 /** Converte o espectrograma num bitmap RGBA para Canvas (eixo de exibição ≠ conteúdo do WAV). */
-export function renderSpectrogram(s: Spectrogram, v: ViewParams): Uint8ClampedArray {
+export function renderSpectrogram(input: Spectrogram | Spectrogram[], v: ViewParams, pick?: (hz: number) => number): Uint8ClampedArray {
+  const specs = Array.isArray(input) ? input : [input];
   const { width: W, height: H } = v;
   const out = new Uint8ClampedArray(W * H * 4);
   const lut = paletteLut(v.palette);
-  const binHz = s.sampleRate / s.nfft;
-  const top = s.maxDb, floor = s.maxDb - v.rangeDb;
-  // mapeamento das linhas de exibição -> bin fracionário
-  const binOfRow = new Float64Array(H);
+  const maxDb = Math.max(...specs.map((q) => q.maxDb));
+  const top = maxDb, floor = maxDb - v.rangeDb;
+  // mapeamento das linhas de exibição -> (STFT escolhida, bin fracionário)
+  const hzOfRow = new Float64Array(H);
+  const idxA = new Int32Array(H), idxB = new Int32Array(H), mixB = new Float64Array(H);
   for (let y = 0; y < H; y++) {
     const rel = 1 - (y + 0.5) / H; // 0 na base
     const hz = v.scale === 'log' ? v.fLo * Math.pow(v.fHi / v.fLo, rel) : v.fLo + (v.fHi - v.fLo) * rel;
-    binOfRow[y] = hz / binHz;
+    hzOfRow[y] = hz;
+    const fi = pick ? pick(Math.max(1, hz)) : 0;
+    idxA[y] = Math.floor(fi);
+    idxB[y] = Math.min(specs.length - 1, idxA[y] + 1);
+    mixB[y] = fi - idxA[y];
   }
+  const sample = (s: Spectrogram, hz: number, fa: number, fb: number, fu: number) => {
+    const bf = hz / (s.sampleRate / s.nfft);
+    const b0 = Math.floor(bf), bu = bf - b0;
+    const ba = Math.min(s.bins - 1, Math.max(0, b0)), bb = Math.min(s.bins - 1, Math.max(0, b0 + 1));
+    const va = s.db[fa * s.bins + ba] * (1 - bu) + s.db[fa * s.bins + bb] * bu;
+    const vb = s.db[fb * s.bins + ba] * (1 - bu) + s.db[fb * s.bins + bb] * bu;
+    return va * (1 - fu) + vb * fu;
+  };
+  const s0 = specs[0];
   for (let x = 0; x < W; x++) {
     const t = v.t0 + ((x + 0.5) / W) * (v.t1 - v.t0);
-    const ff = (t * s.sampleRate) / s.hop;
+    const ff = (t * s0.sampleRate) / s0.hop;
     const f0 = Math.floor(ff), fu = ff - f0;
-    const fa = Math.min(s.frames - 1, Math.max(0, f0)), fb = Math.min(s.frames - 1, Math.max(0, f0 + 1));
+    const fa = Math.min(s0.frames - 1, Math.max(0, f0)), fb = Math.min(s0.frames - 1, Math.max(0, f0 + 1));
     for (let y = 0; y < H; y++) {
-      const bf = binOfRow[y];
-      const b0 = Math.floor(bf), bu = bf - b0;
-      const ba = Math.min(s.bins - 1, Math.max(0, b0)), bb = Math.min(s.bins - 1, Math.max(0, b0 + 1));
-      const va = s.db[fa * s.bins + ba] * (1 - bu) + s.db[fa * s.bins + bb] * bu;
-      const vb = s.db[fb * s.bins + ba] * (1 - bu) + s.db[fb * s.bins + bb] * bu;
-      const d = va * (1 - fu) + vb * fu;
+      let d = sample(specs[idxA[y]], hzOfRow[y], fa, fb, fu);
+      if (mixB[y] > 0) d = d * (1 - mixB[y]) + sample(specs[idxB[y]], hzOfRow[y], fa, fb, fu) * mixB[y];
       let n = (d - floor) / (top - floor);
       n = n <= 0 ? 0 : n >= 1 ? 1 : Math.pow(n, v.gamma);
       const li = Math.round(n * 255) * 3;
