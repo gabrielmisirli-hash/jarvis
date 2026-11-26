@@ -1,0 +1,6 @@
+node_modules/
+dist/
+fixtures/
+e2e/artifacts/
+relatorios/gerados/
+*.log
