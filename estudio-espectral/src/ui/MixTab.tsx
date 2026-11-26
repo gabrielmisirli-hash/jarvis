@@ -7,7 +7,6 @@ import { decodeAudioFile, player } from '../browser/media';
 import { db } from '../browser/storage';
 import { engine } from '../browser/engine';
 import { decodeWav } from '../core/wav';
-import { ACOUSTIC_NOTES } from '../content/methods';
 import { Check, Note, Num, Section, Select, Slider, fmtTime } from './common';
 import { useStudio } from './state';
 
@@ -177,9 +176,6 @@ export function MixTab() {
         <p className="muted">Sem limitador por bloco: um ganho mestre fixo é calculado antes da renderização a partir do pior caso de pico das camadas, para nunca saturar e não alterar o equilíbrio ao longo do tempo.{prev && ` Última prévia: ganho mestre ${prev.gain.toFixed(2)}.`}</p>
       </Section>
 
-      <Section title="O que estes sons são — e o que não são">
-        <ul className="notes">{ACOUSTIC_NOTES.map((n) => <li key={n}>{n}</li>)}</ul>
-      </Section>
     </>
   );
 }

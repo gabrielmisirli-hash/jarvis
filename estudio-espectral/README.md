@@ -4,13 +4,10 @@ Converte frases ou **BMPs originais** (1024×60, fundo preto, texto branco) em �
 legível no espectrograma **reconstruído a partir do WAV exportado**. Tudo roda no aparelho (Web Audio, Web
 Worker, IndexedDB/OPFS): depois do primeiro carregamento funciona em modo avião, sem servidor.
 
-> O texto espectral é uma codificação visual do som. Não há evidência de que seja compreendido
-> inconscientemente, e nada neste app trata ou cura doenças.
-
 ## Fluxo
 Frases (importar BMP / texto→BMP / biblioteca) → **aprovar** → Espectrograma por frase (BMP × reconstrução do
 WAV, métricas) → Fundo e mixer (ruídos, solfeggio, binaural, isocrônico 7,83 Hz, música própria, prévia com/sem
-fundo) → Exportar (duração, pausa em ms, WAV mestre + camada espectral + ZIP, validação) → Histórico e backup.
+fundo) → Exportar (duração, pausa em ms, formato WAV / FLAC / MP3 em 22050 ou 44100 Hz, mistura + camada espectral + ZIP, validação) → Histórico e backup.
 
 Padrões: 110700 amostras (5,020408 s) por frase a 22050 Hz, PCM 16 bits estéreo, pausa 1000 ms, loop até 900 s.
 

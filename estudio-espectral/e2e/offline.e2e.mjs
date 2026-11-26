@@ -136,6 +136,28 @@ try {
   check('nome versionado com data local', /^\d\d_\d\d_\d\d-.+_frase_.*_V1\.wav$/.test(dl.suggestedFilename()), dl.suggestedFilename());
   await page.screenshot({ path: join(art, '3_exportar.png'), fullPage: true });
 
+  // outros formatos, ainda offline: FLAC e MP3 (com medição de legibilidade após decodificar o MP3)
+  const fmtSel = page.getByLabel('Formato de saída');
+  for (const [label, ext, magic] of [['FLAC (sem perdas, menor que WAV)', 'flac', 'fLaC'], ['MP3 (compatível com tudo, com perdas)', 'mp3', null]]) {
+    await fmtSel.selectOption({ label });
+    await page.getByRole('button', { name: `Gerar ${ext.toUpperCase()}` }).click();
+    await page.locator('.checks li', { hasText: `.${ext}` }).first().waitFor({ timeout: 90000 });
+    const items = await page.locator('.checks li').allInnerTexts();
+    const fileChecks = items.filter((c) => c.includes(`.${ext}:`));
+    check(`exportação ${ext.toUpperCase()} validada pelo app`, fileChecks.length >= 1 && fileChecks.every((c) => c.includes('OK')), items.join(' | '));
+    const [d2] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: new RegExp(`^⬇ .*\\.${ext}`) }).first().click()]);
+    const p2 = join(art, d2.suggestedFilename());
+    await d2.saveAs(p2);
+    const b2 = readFileSync(p2);
+    check(`${ext.toUpperCase()} baixado offline`, magic ? b2.subarray(0, 4).toString() === magic : b2[0] === 0xff, `${d2.suggestedFilename()} ${b2.length} bytes`);
+    if (ext === 'mp3') {
+      const leg = items.find((c) => c.startsWith('Legibilidade medida após MP3'));
+      const m = leg && /SSIM ([\d.]+) — antes da compressão ([\d.]+)/.exec(leg);
+      check('legibilidade medida após MP3', !!m && parseFloat(m[1]) > 0.4, leg ?? 'sem medição');
+    }
+  }
+  await fmtSel.selectOption({ label: 'WAV (PCM 16 bits, sem perdas)' });
+
   // cancelamento de render longo
   await dur.fill('3600');
   await page.getByRole('button', { name: 'Gerar WAV' }).click();

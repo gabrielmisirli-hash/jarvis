@@ -214,11 +214,3 @@ export const METHODS: Method[] = [
     ],
   },
 ];
-
-export const ACOUSTIC_NOTES = [
-  'Texto espectral é uma codificação VISUAL do som: aparece no espectrograma, mas não há evidência de que seja compreendido inconscientemente. Testes duplo-cegos de fitas subliminares de autoajuda não encontraram efeito além da expectativa (Greenwald et al., 1991, Psychological Science, 2(2), 119–122).',
-  'Batimentos binaurais: metanálise encontrou efeitos pequenos e heterogêneos sobre ansiedade, dor e cognição (Garcia-Argibay et al., 2019, Psychological Research, 83(2), 357–372); revisão sistemática sobre arrastamento de ondas cerebrais encontrou resultados inconsistentes (Ingendoh et al., 2023, PLOS ONE 18(5): e0286023). Requer fones estéreo.',
-  'Frequências "solfeggio" (174–963 Hz) são tons escolhidos por tradição popular recente, sem respaldo científico para efeitos terapêuticos específicos.',
-  '7,83 Hz é o valor nominal da ressonância Schumann, um fenômeno ELETROMAGNÉTICO da cavidade Terra–ionosfera (varia em torno desse valor). Pulsos sonoros a 7,83 Hz não reproduzem esse campo.',
-  'Nada neste aplicativo trata, previne ou cura doenças. Procure profissional de saúde quando necessário.',
-];

@@ -1,6 +1,7 @@
 /** Modelo do projeto, nomeação de arquivos, aprovação e importação de frases (CSV/TXT/XLSX). */
 import { unzipSync, strFromU8 } from 'fflate';
 import { DEFAULT_GAP_MS, DEFAULT_TOTAL_SECONDS } from './constants';
+import { DEFAULT_OUTPUT, type OutputFormat } from './encoders';
 import type { MappingConfig } from './mapping';
 import type { MixSettings } from './mixer';
 import { DEFAULT_MIX } from './mixer';
@@ -41,6 +42,7 @@ export interface ProjectSettings {
   endMode: EndMode;
   synth: SynthParams;
   mix: MixSettings;
+  output: OutputFormat;
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = {
@@ -49,6 +51,7 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   endMode: 'completas',
   synth: DEFAULT_SYNTH,
   mix: DEFAULT_MIX,
+  output: DEFAULT_OUTPUT,
 };
 
 export interface Project {

@@ -7,7 +7,8 @@ import type { PhraseItem } from '../core/project';
 import { DEFAULT_SYNTH } from '../core/synth';
 import type { Palette, StftParams, ViewParams, WindowKind } from '../core/spectrum';
 import { engine } from '../browser/engine';
-import { saveFile } from '../browser/media';
+import { decodeAudioFile, saveFile } from '../browser/media';
+import { encodeWav } from '../core/wav';
 import type { AnalyzeRes } from '../workers/protocol';
 import { Check, Note, Num, PixelCanvas, RgbaCanvas, Section, Select } from './common';
 import { useStudio } from './state';
@@ -181,7 +182,7 @@ export function SpectroTab() {
             options={[
               { value: 'isolada', label: 'WAV da frase isolada' },
               { value: 'mistura', label: 'Mistura real com o fundo atual' },
-              { value: 'externo', label: 'WAV externo (ex.: original de referência)' },
+              { value: 'externo', label: 'Arquivo externo (WAV, MP3, FLAC… ex.: original ou exportado)' },
             ]}
             onChange={setSource}
           />
@@ -201,9 +202,21 @@ export function SpectroTab() {
         </div>
         {source === 'externo' && (
           <div className="row gap">
-            <button onClick={() => extInput.current?.click()}>Escolher WAV…</button>
+            <button onClick={() => extInput.current?.click()}>Escolher arquivo de áudio…</button>
             <span className="muted">{extWav?.name ?? 'nenhum'}</span>
-            <input ref={extInput} type="file" accept=".wav,audio/wav" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) setExtWav({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) }); }} />
+            <input ref={extInput} type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg" hidden onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              const raw = new Uint8Array(await f.arrayBuffer());
+              const isWav = raw[0] === 0x52 && raw[1] === 0x49 && raw[8] === 0x57;
+              try {
+                // WAV é lido byte a byte; outros formatos passam pelo decodificador do navegador (reamostrado a 22050 Hz)
+                const data = isWav ? raw : await decodeAudioFile(f).then((d) => encodeWav([d.left, d.right], SR));
+                setExtWav({ name: f.name, data });
+              } catch (err) {
+                setErr((err as Error).message);
+              }
+            }} />
           </div>
         )}
         <div className="grid4">

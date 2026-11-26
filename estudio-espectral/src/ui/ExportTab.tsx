@@ -4,7 +4,8 @@ import { MAX_GAP_MS, MAX_TOTAL_SECONDS, PHRASE_SAMPLES, SR } from '../core/const
 import { encodeBmp24 } from '../core/image';
 import { isApproved, namePrefix, nextVersionName, uid } from '../core/project';
 import { cycleSamples, planSequence } from '../core/sequence';
-import { parseWavHeader } from '../core/wav';
+import { FORMAT_INFO, mp3Bitrates, normalizeFormat, type Container } from '../core/encoders';
+import { checkFile, lossyLegibility } from '../browser/validate';
 import { engine } from '../browser/engine';
 import { saveFile } from '../browser/media';
 import { db } from '../browser/storage';
@@ -40,7 +41,10 @@ export function ExportTab() {
 
   const n = project.phrases.length;
   const plan = n ? planSequence(project.phrases.map(() => PHRASE_SAMPLES), Math.round((s.gapMs / 1000) * SR), Math.round(s.totalSeconds * SR), s.endMode) : null;
-  const bytes = Math.round(s.totalSeconds * SR) * 4 + 44;
+  const fmt = normalizeFormat(s.output);
+  const setFmt = (patch: Partial<typeof fmt>) => set({ output: normalizeFormat({ ...fmt, ...patch }) });
+  const wavBytes = Math.round(s.totalSeconds * fmt.sampleRate) * 4 + 44;
+  const bytes = fmt.container === 'wav' ? wavBytes : fmt.container === 'flac' ? wavBytes * 0.5 : (s.totalSeconds * fmt.mp3Kbps * 1000) / 8;
 
   async function generate() {
     if (!approved) return setStatus('Aprove a sequência (aba Frases) antes de gerar.');
@@ -54,27 +58,22 @@ export function ExportTab() {
       for (const p of project.phrases) synths.push(await synthOf(p));
       const music = s.mix.music.trackId ? await loadMusic(s.mix.music.trackId) : null;
       const job = engine.render(
-        { phrases: synths.map((r) => r.mono.slice()), totalSeconds: s.totalSeconds, gapMs: s.gapMs, endMode: s.endMode, mix: s.mix, music, outputs: { mix: outs.mix, spectral: outs.spectral }, sink: 'auto', baseName: name },
+        { phrases: synths.map((r) => r.mono.slice()), totalSeconds: s.totalSeconds, gapMs: s.gapMs, endMode: s.endMode, mix: s.mix, music, outputs: { mix: outs.mix, spectral: outs.spectral }, sink: 'auto', baseName: name, format: fmt },
         (f) => setProgress(f),
       );
       setJobId(job.id);
       const r = await job.promise;
       // validação do que foi realmente gravado
       const checks: string[] = [];
-      for (const f of r.files) {
-        const head = new Uint8Array(await f.blob.slice(0, 64).arrayBuffer());
-        const info = parseWavHeader(head);
-        const frames = info.declaredFrames;
-        const okSize = f.blob.size === info.dataOffset + info.declaredDataBytes;
-        const okFmt = info.sampleRate === SR && info.channels === 2 && info.bitsPerSample === 16;
-        const okLen = frames === Math.round(s.totalSeconds * SR);
-        // conteúdo: lê 1 s no meio do arquivo e confirma que não é silêncio
-        const mid = info.dataOffset + Math.floor(frames / 2) * 4;
-        const slice = new Int16Array(await f.blob.slice(mid, mid + SR * 4).arrayBuffer());
-        let pk = 0;
-        for (const v of slice) pk = Math.max(pk, Math.abs(v));
-        const problems = [!okFmt && 'formato', !okLen && 'duração', !okSize && 'tamanho'].filter(Boolean);
-        checks.push(`${f.name}: ${info.sampleRate} Hz, ${info.channels} canais, PCM ${info.bitsPerSample} bits, ${fmtTime(frames / info.sampleRate)} (${frames} amostras), ${fmtBytes(f.blob.size)}, pico no meio ${(pk / 32768).toFixed(2)} — ${problems.length ? 'PROBLEMA: ' + problems.join(', ') : 'OK'} (${f.storage === 'opfs' ? 'gravado em disco/OPFS' : 'em memória'})`);
+      for (const f of r.files) checks.push(await checkFile(f, s.totalSeconds));
+      if (fmt.container === 'mp3' && r.files.length) {
+        const f = r.files.find((x) => x.kind === 'spectral') ?? r.files[0];
+        try {
+          const leg = await lossyLegibility(f, project.phrases[0], synths[0].mono, s.synth.mapping, synths[0].frame);
+          if (leg) checks.push(`Legibilidade medida após MP3 (frase 1, decodificada de volta): SSIM ${leg.ssim.toFixed(3)} — antes da compressão ${leg.ssimRef.toFixed(3)}.`);
+        } catch (e) {
+          checks.push(`Não foi possível medir a legibilidade do MP3 neste navegador: ${(e as Error).message}`);
+        }
       }
       if (r.clippedSamples) checks.push(`Atenção: ${r.clippedSamples} amostras saturadas.`);
       const extras: { name: string; blob: Blob }[] = [];
@@ -86,7 +85,8 @@ export function ExportTab() {
         duracao_segundos: s.totalSeconds,
         pausa_ms: s.gapMs,
         final: s.endMode,
-        amostragem_hz: SR,
+        amostragem_hz: fmt.sampleRate,
+        formato: fmt,
         amostras_por_frase: PHRASE_SAMPLES,
         estereo: true,
         sintese: s.synth,
@@ -151,17 +151,22 @@ export function ExportTab() {
           <input value={project.name} onChange={(e) => update((p) => ({ ...p, name: e.target.value }))} />
         </label>
         <p>Próximo nome: <code>{nextName}</code> <small className="muted">(data local do aparelho; nunca sobrescreve: V1, V2…)</small></p>
-        <Check label="WAV mestre final (mistura) — 22050 Hz, 16 bits, estéreo" checked={outs.mix} onChange={(v) => setOuts({ ...outs, mix: v })} />
-        <Check label="WAV da camada espectral isolada (sem fundo, L = R)" checked={outs.spectral} onChange={(v) => setOuts({ ...outs, spectral: v })} />
+        <div className="grid4">
+          <Select<Container> label="Formato de saída" value={fmt.container} options={(Object.keys(FORMAT_INFO) as Container[]).map((c) => ({ value: c, label: FORMAT_INFO[c].label }))} onChange={(v) => setFmt({ container: v })} />
+          <Select label="Taxa de amostragem" value={fmt.sampleRate} options={[{ value: 22050, label: '22050 Hz (original da síntese)' }, { value: 44100, label: '44100 Hz (padrão de CD)' }]} onChange={(v) => setFmt({ sampleRate: v as 22050 | 44100 })} />
+          {fmt.container === 'mp3' && <Select label="Qualidade MP3" value={fmt.mp3Kbps} options={mp3Bitrates(fmt.sampleRate).map((k) => ({ value: k, label: `${k} kbps` }))} onChange={(v) => setFmt({ mp3Kbps: v })} />}
+        </div>
+        {fmt.container === 'mp3' && <p className="muted">Ao terminar, o app decodifica o MP3 de volta e mede a legibilidade da frase 1. Em 22050 Hz o MP3 vai até 160 kbps; em 44100 Hz até 320 kbps.</p>}
+        <Check label={`Mistura final (${FORMAT_INFO[fmt.container].ext.toUpperCase()}, estéreo)`} checked={outs.mix} onChange={(v) => setOuts({ ...outs, mix: v })} />
+        <Check label={`Camada espectral isolada (${FORMAT_INFO[fmt.container].ext.toUpperCase()}, sem fundo, L = R)`} checked={outs.spectral} onChange={(v) => setOuts({ ...outs, spectral: v })} />
         <Check label="ZIP com BMPs, WAVs por frase, sequencia.json e projeto.json" checked={outs.pack} onChange={(v) => setOuts({ ...outs, pack: v })} />
-        <p className="muted">Tamanho estimado de cada WAV longo: {fmtBytes(bytes)}. Renderização em blocos de 1 s (memória constante); grava em disco (OPFS) quando o navegador permite.</p>
+        <p className="muted">Tamanho estimado de cada arquivo: {fmtBytes(bytes)}. Renderização em blocos de 1 s (memória constante); grava em disco (OPFS) quando o navegador permite.</p>
         {!approved && <Note kind="warn">A sequência atual não está aprovada. Vá à aba Frases e aprove.</Note>}
         <div className="row gap">
-          <button className="primary" onClick={() => void generate()} disabled={progress !== null || !n}>Gerar WAV</button>
+          <button className="primary" onClick={() => void generate()} disabled={progress !== null || !n}>Gerar {FORMAT_INFO[fmt.container].ext.toUpperCase()}</button>
           {jobId !== null && <button className="danger" onClick={() => engine.cancel(jobId)}>Cancelar</button>}
         </div>
         {progress !== null && <Progress value={progress} />}
-        <Note>MP3/FLAC: não incluídos nesta fase. Compressão com perdas (MP3) pode apagar detalhes das letras; para conferir o espectrograma use sempre o WAV.</Note>
       </Section>
 
       {result && (

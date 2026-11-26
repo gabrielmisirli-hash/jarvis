@@ -1,3 +1,4 @@
+import type { OutputFormat } from '../core/encoders';
 import type { ImageComparison } from '../core/metrics';
 import type { MappingConfig, RowFrame } from '../core/mapping';
 import type { MixSettings } from '../core/mixer';
@@ -70,13 +71,17 @@ export interface RenderReq {
   /** 'opfs' grava em disco (Origin Private File System) quando disponível; 'memory' monta Blob */
   sink: 'auto' | 'memory';
   baseName: string;
+  /** formato dos arquivos gerados (padrão: WAV 22050 Hz) */
+  format?: OutputFormat;
 }
 export interface RenderFile {
   name: string;
   kind: 'mix' | 'spectral';
   blob: Blob;
   storage: 'opfs' | 'memory';
+  /** amostras por canal na taxa de saída */
   frames: number;
+  format: OutputFormat;
 }
 export interface RenderProgress {
   type: 'progress';

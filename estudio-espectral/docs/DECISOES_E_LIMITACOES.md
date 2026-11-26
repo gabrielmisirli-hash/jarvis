@@ -50,8 +50,13 @@ O código Python declara MIT, mas não foi auditada a origem de cada trecho; a r
   automaticamente); fallback: taxa nativa + reamostragem.
 - **Fontes OFL embutidas** (Arimo ≈ métrica do Arial; Roboto Condensed ≈ Arial Narrow) para texto→BMP offline
   idêntico em todos os aparelhos. Geometria medida nas referências: base na linha 44, maiúsculas ~28 px.
-- **Sem MP3/FLAC nesta fase**: MP3 exige codificador com licença LGPL (lamejs) ou WebCodecs com suporte
-  irregular; perdas podem destruir letras. WAV mestre primeiro, como pedido.
+- **Formatos de saída** (escolha na aba Exportar), todos codificados no aparelho e em streaming:
+  WAV PCM 16 bits; **FLAC** (codificador próprio, sem perdas — ida e volta bit a bit testada; lido pelo
+  libsndfile; ~33% do WAV na mistura e ~13% na camada espectral, que usa canal lateral L−R = 0); **MP3** CBR via
+  LAME (`@breezystack/lamejs`, LGPL-3.0, chunk separado carregado só quando escolhido, incluído no precache).
+  Taxa 22050 Hz (nativa) ou 44100 Hz (reamostragem 2× FIR Blackman, imagens < −50 dB). MP3 em 22050 Hz é
+  MPEG-2 (até 160 kbps); em 44100 Hz até 320 kbps. Após exportar MP3 o app decodifica o arquivo de volta e mede
+  a legibilidade da frase 1 (no teste: SSIM 0,713 antes e depois a 160 kbps).
 
 ## 4. Licenças das dependências
 
@@ -60,11 +65,12 @@ O código Python declara MIT, mas não foi auditada a origem de cada trecho; a r
 | react, react-dom 18.3.1 | MIT | interface |
 | dexie 4.0.11 | Apache-2.0 | IndexedDB |
 | fflate 0.8.2 | MIT | ZIP (backup, pacote, leitura XLSX) |
+| @breezystack/lamejs 1.2.7 | LGPL-3.0 | codificação MP3 (módulo separado e substituível; a LGPL permite uso comercial mantendo o aviso e a possibilidade de troca da biblioteca) |
 | vite-plugin-pwa / workbox | MIT | service worker e manifesto |
 | @fontsource/arimo, @fontsource/roboto-condensed | pacotes MIT; fontes SIL OFL 1.1 | texto→BMP |
 | vite, typescript, vitest, @vitejs/plugin-react (dev) | MIT / Apache-2.0 | build e testes |
 
-Todas permitem uso comercial. A OFL exige manter o aviso de licença das fontes (incluído pelo Fontsource).
+Todas permitem uso comercial (LGPL com as condições acima). A OFL exige manter o aviso de licença das fontes (incluído pelo Fontsource).
 Nenhuma gravação musical é distribuída.
 
 ## 5. Estado da matriz de testes (MATRIZ_DE_TESTES.md)
@@ -91,6 +97,7 @@ Legenda: ✅ automatizado e passando nesta sessão · 🟡 implementado, verific
 | Modo avião Android real | ⛔ | requer aparelho |
 | Modo avião iPhone (Tela de Início) | ⛔ | **não validado** — requer iPhone real |
 | Backup e restauração | ✅ | e2e offline: exporta ZIP, apaga todos os dados, restaura histórico e frases |
+| Exportar FLAC e MP3 offline | ✅ | e2e: validação do app, arquivo baixado, MP3 decodificado de volta com legibilidade medida; arquivos lidos pelo libsndfile |
 | Cancelar render | ✅ | e2e |
 | Nenhum acesso remoto | ✅ | e2e monitora todas as requisições |
 | Sessão offline de 30 min / armazenamento pressionado | ⛔ | pendente |
@@ -114,5 +121,5 @@ Legenda: ✅ automatizado e passando nesta sessão · 🟡 implementado, verific
 - **F2**: biblioteca, assistente, planilhas — implementado em versão inicial (catálogos locais, métodos com
   citações, importação CSV/XLSX/TXT, grupos).
 - **F3**: mixer, música, ruídos, exportação longa — implementado; falta medir desempenho em celulares.
-- **F4 (pendente)**: MP3/FLAC, empacotamento nativo opcional (Capacitor para Android/iOS, Tauri para Windows)
+- **F4 (pendente)**: empacotamento nativo opcional (Capacitor para Android/iOS, Tauri para Windows)
   sobre este mesmo front-end, caso a retenção de dados da PWA se mostre insuficiente nos testes reais.

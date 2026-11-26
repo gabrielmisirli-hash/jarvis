@@ -128,7 +128,7 @@ function Assistant({ onPick }: { onPick: (l: string[]) => void }) {
   const script = m.script?.(vals);
   return (
     <Section title="Assistente de frases (offline)">
-      <Note>Modelos locais para inspirar a escrita. Nada entra no áudio sem sua revisão e aprovação. Não são tratamentos.</Note>
+      <Note>Modelos locais para inspirar a escrita. Nada entra no áudio sem sua revisão e aprovação.</Note>
       <div className="grid4">
         <Select label="Método" value={mid} options={METHODS.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => { setMid(v); setVals({}); }} />
         <Select label="Pessoa" value={person} options={[{ value: 'Eu', label: 'Eu (1ª pessoa)' }, { value: 'Você', label: 'Você (2ª pessoa)' }]} onChange={setPerson} />

@@ -12,7 +12,8 @@ import { planSequence } from '../core/sequence';
 import { energyBand, pickByRowSpacing, renderSpectrogram, rowFilterbank, stft, stftMulti } from '../core/spectrum';
 import { hzToRow, rowToHz } from '../core/mapping';
 import { imageToMono } from '../core/synth';
-import { decodeWav, encodePcm16, encodeWav, wavHeader } from '../core/wav';
+import { decodeWav, encodeWav } from '../core/wav';
+import { DEFAULT_OUTPUT, FORMAT_INFO, createEncoder, normalizeFormat, type OutputFormat, type StreamEncoder } from '../core/encoders';
 import type { AnalyzeReq, RenderFile, RenderReq, SynthReq, WorkerReq, WorkerRes } from './protocol';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
@@ -86,8 +87,11 @@ interface Sink {
   abort(): Promise<void>;
 }
 
-async function makeSink(name: string, kind: 'mix' | 'spectral', frames: number, mode: 'auto' | 'memory'): Promise<Sink> {
-  const header = wavHeader(frames, SR, 2);
+// MP3 (LAME, LGPL-3.0) só é baixado/carregado quando o formato MP3 é escolhido; fica no precache para uso offline
+const loadMp3 = async () => (await import('@breezystack/lamejs')).Mp3Encoder as never;
+
+async function makeSink(name: string, kind: 'mix' | 'spectral', frames: number, mode: 'auto' | 'memory', format: OutputFormat, header: Uint8Array): Promise<Sink> {
+  const mime = FORMAT_INFO[format.container].mime;
   if (mode === 'auto' && 'storage' in navigator && typeof navigator.storage.getDirectory === 'function') {
     try {
       const root = await navigator.storage.getDirectory();
@@ -103,7 +107,7 @@ async function makeSink(name: string, kind: 'mix' | 'spectral', frames: number, 
           handle.flush();
           handle.close();
           const blob = await fh.getFile();
-          return { name, kind, blob, storage: 'opfs', frames };
+          return { name, kind, blob, storage: 'opfs', frames, format };
         },
         abort: async () => { try { handle.close(); } catch { /* já fechado */ } await dir.removeEntry(name).catch(() => undefined); },
       };
@@ -113,8 +117,8 @@ async function makeSink(name: string, kind: 'mix' | 'spectral', frames: number, 
   }
   const parts: BlobPart[] = [header];
   return {
-    write: (c) => parts.push(c),
-    finish: async () => ({ name, kind, blob: new Blob(parts, { type: 'audio/wav' }), storage: 'memory', frames }),
+    write: (c) => { if (c.length) parts.push(c); },
+    finish: async () => ({ name, kind, blob: new Blob(parts, { type: mime }), storage: 'memory', frames, format }),
     abort: async () => { parts.length = 0; },
   };
 }
@@ -126,18 +130,22 @@ async function doRender(m: RenderReq) {
   const gap = Math.round((m.gapMs / 1000) * SR);
   const plan = planSequence(m.phrases.map((p) => p.length), gap, total, m.endMode);
   const r = new SessionRenderer({ phrases: m.phrases, plan, mix: m.mix, music: m.music, backgroundOff: m.backgroundOff });
-  const sinks: { sink: Sink; kind: 'mix' | 'spectral' }[] = [];
-  if (m.outputs.mix) sinks.push({ kind: 'mix', sink: await makeSink(`${m.baseName}.wav`, 'mix', total, m.sink) });
-  if (m.outputs.spectral) sinks.push({ kind: 'spectral', sink: await makeSink(`${m.baseName}_camada_espectral.wav`, 'spectral', total, m.sink) });
-  const stats = { clipped: 0 };
+  const format = normalizeFormat(m.format ?? DEFAULT_OUTPUT);
+  const ext = FORMAT_INFO[format.container].ext;
+  const sinks: { sink: Sink; kind: 'mix' | 'spectral'; enc: StreamEncoder }[] = [];
+  for (const [kind, on, suffix] of [['mix', m.outputs.mix, ''], ['spectral', m.outputs.spectral, '_camada_espectral']] as const) {
+    if (!on) continue;
+    const enc = await createEncoder(format, total, loadMp3);
+    sinks.push({ kind, enc, sink: await makeSink(`${m.baseName}${suffix}.${ext}`, kind, enc.outFrames, m.sink, format, enc.header) });
+  }
   const block = SR; // 1 s por bloco: memória constante (~0,5 MB) independentemente da duração
   try {
     for (let s = 0; s < total; s += block) {
       if (cancelled.has(m.id)) throw new Error('cancelado');
       const n = Math.min(block, total - s);
       const o = r.renderBlock(s, n);
-      for (const { sink, kind } of sinks) {
-        sink.write(kind === 'mix' ? encodePcm16([o.left, o.right], stats) : encodePcm16([o.spectral, o.spectral]));
+      for (const { sink, kind, enc } of sinks) {
+        sink.write(kind === 'mix' ? enc.encode(o.left, o.right) : enc.encode(o.spectral, o.spectral));
       }
       if ((s / block) % 5 === 0) {
         post({ type: 'progress', id: m.id, fraction: (s + n) / total });
@@ -145,8 +153,12 @@ async function doRender(m: RenderReq) {
       }
     }
     const files: RenderFile[] = [];
-    for (const { sink } of sinks) files.push(await sink.finish());
-    post({ type: 'render-done', id: m.id, files, occurrences: plan.occurrences, masterGain: r.masterGain, clippedSamples: stats.clipped, seconds: total / SR });
+    for (const { sink, enc } of sinks) {
+      sink.write(enc.finish());
+      files.push(await sink.finish());
+    }
+    const clipped = sinks.filter((x) => x.kind === 'mix').reduce((a, x) => a + x.enc.stats.clipped, 0);
+    post({ type: 'render-done', id: m.id, files, occurrences: plan.occurrences, masterGain: r.masterGain, clippedSamples: clipped, seconds: total / SR });
   } catch (e) {
     for (const { sink } of sinks) await sink.abort();
     const isCancel = cancelled.has(m.id);

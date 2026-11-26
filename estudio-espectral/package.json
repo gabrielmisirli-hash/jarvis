@@ -15,6 +15,7 @@
     "e2e": "node e2e/offline.e2e.mjs"
   },
   "dependencies": {
+    "@breezystack/lamejs": "1.2.7",
     "@fontsource/arimo": "5.2.5",
     "@fontsource/roboto-condensed": "5.2.5",
     "dexie": "4.0.11",
